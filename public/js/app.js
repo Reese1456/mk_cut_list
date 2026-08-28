@@ -15,12 +15,15 @@ import {
   expandCabinet, consolidate, totalArea, totalEdging, describeCabinet, resolve,
 } from './rules.js';
 import { DEFAULT_GLOBALS } from './constants.js';
+import { cutlistRows, toCsv, cutlistFilename, downloadCsv } from './csv.js';
 import {
   FAMILIES, family, config, fieldsFor, makeCabinet, widthsFor, defaultWidthFor,
   SIZE_FIELDS, GLOBAL_FIELDS,
 } from './catalog.js';
 
 const DRAFT_KEY = 'mkitchens.cutlist.draft';
+const PRESET_KEY = 'mkitchens.cutlist.presets';
+const DISPLAY_KEY = 'mkitchens.cutlist.display';
 
 /* ------------------------------------------------------------------ *
  * State
@@ -32,6 +35,9 @@ const state = {
   cabinets: [],
   view: 'by-cabinet',
 };
+
+/** Cabinet setups the operator has saved to reuse. */
+let presets = [];
 
 /** Cards the operator has expanded. Kept out of the saved draft. */
 const openCards = new Set();
@@ -126,6 +132,163 @@ function loadDraft() {
   } catch {
     // A corrupt draft should never stop the app loading.
   }
+}
+
+/* ------------------------------------------------------------------ *
+ * Saved presets
+ * ------------------------------------------------------------------ */
+
+function loadPresets() {
+  try {
+    const raw = localStorage.getItem(PRESET_KEY);
+    presets = raw ? JSON.parse(raw) : [];
+    if (!Array.isArray(presets)) presets = [];
+  } catch {
+    presets = [];
+  }
+}
+
+function savePresets() {
+  try {
+    localStorage.setItem(PRESET_KEY, JSON.stringify(presets));
+  } catch {
+    // Nothing to do if the browser will not store it.
+  }
+}
+
+/** Store a cabinet's setup under a name so it can be added again in one click. */
+function addPreset(name, cab) {
+  presets.push({
+    id: uid(),
+    name,
+    type: cab.type,
+    config: cab.config,
+    width: cab.width,
+    overrides: { ...cab.overrides },
+  });
+  savePresets();
+  renderPresets();
+}
+
+function renderPresets() {
+  const host = $('#preset-list');
+  const empty = $('#preset-empty');
+  host.replaceChildren();
+
+  empty.hidden = presets.length > 0;
+  $('#preset-count').textContent = presets.length
+    ? `${presets.length} saved`
+    : '';
+
+  for (const preset of presets) {
+    const chip = el('div', 'preset');
+
+    const use = el('button', 'preset-use');
+    use.type = 'button';
+    use.append(el('span', 'preset-name', preset.name));
+    use.append(el('span', 'preset-sub',
+      `${family(preset.type)?.short ?? preset.type} ${preset.width}`));
+    use.title = `Add ${preset.name}`;
+    use.addEventListener('click', () => {
+      state.cabinets.push({
+        id: uid(),
+        type: preset.type,
+        config: preset.config,
+        width: preset.width,
+        qty: 1,
+        label: preset.name,
+        overrides: { ...preset.overrides },
+      });
+      saveDraft();
+      renderCabinets();
+      renderOutput();
+    });
+
+    const remove = el('button', 'ghost danger preset-remove', '×');
+    remove.type = 'button';
+    remove.title = `Forget the ${preset.name} preset`;
+    remove.addEventListener('click', () => {
+      if (!confirm(`Forget the preset "${preset.name}"?`)) return;
+      presets = presets.filter((x) => x.id !== preset.id);
+      savePresets();
+      renderPresets();
+    });
+
+    chip.append(use, remove);
+    host.append(chip);
+  }
+}
+
+/* ------------------------------------------------------------------ *
+ * Display settings
+ *
+ * The theme and text size are the operator's own preference and are stored
+ * separately from the job, so they survive clearing a kitchen.
+ * ------------------------------------------------------------------ */
+
+const display = { theme: 'auto', size: 'normal' };
+
+function applyDisplay() {
+  const root = document.documentElement;
+  if (display.theme === 'auto') root.removeAttribute('data-theme');
+  else root.setAttribute('data-theme', display.theme);
+  root.setAttribute('data-size', display.size);
+
+  for (const b of document.querySelectorAll('#theme-toggle button')) {
+    b.classList.toggle('on', b.dataset.theme === display.theme);
+  }
+  for (const b of document.querySelectorAll('#size-toggle button')) {
+    b.classList.toggle('on', b.dataset.size === display.size);
+  }
+
+  try {
+    localStorage.setItem(DISPLAY_KEY, JSON.stringify(display));
+  } catch {
+    // A stored preference is a convenience, not a requirement.
+  }
+}
+
+function loadDisplay() {
+  try {
+    const raw = localStorage.getItem(DISPLAY_KEY);
+    if (raw) Object.assign(display, JSON.parse(raw));
+  } catch {
+    // Keep the defaults.
+  }
+}
+
+function wireDisplay() {
+  $('#theme-toggle').addEventListener('click', (e) => {
+    const button = e.target.closest('button[data-theme]');
+    if (!button) return;
+    display.theme = button.dataset.theme;
+    applyDisplay();
+  });
+
+  $('#size-toggle').addEventListener('click', (e) => {
+    const button = e.target.closest('button[data-size]');
+    if (!button) return;
+    display.size = button.dataset.size;
+    applyDisplay();
+  });
+}
+
+/* ------------------------------------------------------------------ *
+ * Export
+ * ------------------------------------------------------------------ */
+
+function wireExport() {
+  $('#export-csv').addEventListener('click', () => {
+    const { consolidated } = compute();
+    if (consolidated.length === 0) {
+      alert('Add some cabinets first - there is nothing to cut yet.');
+      return;
+    }
+    const rows = cutlistRows(state.job, consolidated, {
+      thickness: state.globals.boardThickness,
+    });
+    downloadCsv(cutlistFilename(state.job), toCsv(rows));
+  });
 }
 
 /* ------------------------------------------------------------------ *
@@ -555,7 +718,22 @@ function buildCardBody(cab, body) {
     'Height and depth are blank unless you change them - the standard for this '
     + 'family is shown in grey. Every panel re-cuts as you type.');
 
+  /* Save this setup to reuse on the next kitchen. */
+  const savePreset = el('button', null, 'Save as preset');
+  savePreset.type = 'button';
+  savePreset.style.marginTop = '12px';
+  savePreset.addEventListener('click', () => {
+    const suggested = cab.label
+      || `${family(cab.type)?.short ?? cab.type} ${cab.width} ${config(cab.type, cab.config)?.label ?? ''}`.trim();
+    const name = prompt('Name this preset', suggested);
+    if (name === null) return;
+    const trimmed = name.trim();
+    if (!trimmed) return;
+    addPreset(trimmed, cab);
+  });
+
   body.append(row1, chips, sizeRow, sizeHint, row2);
+  body.append(savePreset);
 
   /* configuration-specific options */
   const fields = fieldsFor(cab.type, cab.config);
@@ -691,7 +869,8 @@ function renderOutput() {
   /* ---- totals ---- */
   const panels = all.reduce((n, p) => n + p.qty, 0);
   $('#t-cabinets').textContent = String(state.cabinets.reduce((n, c) => n + (c.qty || 0), 0));
-  $('#t-lines').textContent = String(consolidated.length);
+  // The line count lives next to the cutting list heading rather than in the
+  // masthead, which is reserved for the figures used when ordering board.
   $('#t-panels').textContent = String(panels);
   $('#t-area').textContent = `${totalArea(all).toFixed(2)} m²`;
   $('#t-edging').textContent = `${totalEdging(all).toFixed(1)} m`;
@@ -804,12 +983,18 @@ function wireClearAll() {
 }
 
 loadDraft();
+loadPresets();
+loadDisplay();
+applyDisplay();
+wireDisplay();
+wireExport();
 wireJobFields();
 renderGlobals();
 wireGlobalsReset();
 renderAddForm();
 wireViewToggle();
 wireClearAll();
+renderPresets();
 renderCabinets();
 renderOutput();
 

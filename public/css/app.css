@@ -76,13 +76,24 @@
 
 * { box-sizing: border-box; }
 
+/* ------------------------------------------------------------------ *
+ * Text size
+ *
+ * Three steps, set on the root element. Everything below sizes from --fs so
+ * the whole interface grows together rather than only the body copy.
+ * ------------------------------------------------------------------ */
+
+:root { --fs: 14px; }
+:root[data-size="large"] { --fs: 16px; }
+:root[data-size="xl"] { --fs: 18px; }
+
 body {
   margin: 0;
   background: var(--ground);
   color: var(--ink);
   font-family: var(--f-mono);
-  font-size: 13px;
-  line-height: 1.55;
+  font-size: var(--fs);
+  line-height: 1.6;
   -webkit-font-smoothing: antialiased;
 }
 
@@ -175,7 +186,7 @@ body {
 .sec-head h2 {
   font-family: var(--f-display);
   font-weight: 700;
-  font-size: 13px;
+  font-size: calc(var(--fs) + 1px);
   letter-spacing: .02em;
   margin: 0;
 }
@@ -204,25 +215,25 @@ body {
 
 .field { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
 .field > label {
-  font-size: 9.5px;
+  font-size: calc(var(--fs) - 3.5px);
   font-weight: 700;
   letter-spacing: .11em;
   text-transform: uppercase;
   color: var(--ink-faint);
 }
-.field .hint { font-size: 11px; color: var(--ink-faint); line-height: 1.4; }
+.field .hint { font-size: calc(var(--fs) - 2px); color: var(--ink-faint); line-height: 1.45; }
 
 input[type="text"],
 input[type="number"],
 input[type="date"],
 select {
   font-family: var(--f-mono);
-  font-size: 13px;
+  font-size: var(--fs);
   color: var(--ink);
   background: var(--surface);
   border: 1px solid var(--rule-strong);
   border-radius: 3px;
-  padding: 7px 9px;
+  padding: 9px 10px;
   width: 100%;
   min-width: 0;
 }
@@ -240,7 +251,7 @@ input::placeholder { color: var(--ink-faint); }
 
 .check { display: flex; align-items: center; gap: 8px; }
 .check input { width: 15px; height: 15px; accent-color: var(--accent); }
-.check label { font-size: 12.5px; }
+.check label { font-size: var(--fs); }
 
 /* ------------------------------------------------------------------ *
  * Buttons
@@ -248,7 +259,7 @@ input::placeholder { color: var(--ink-faint); }
 
 button {
   font-family: var(--f-mono);
-  font-size: 12px;
+  font-size: calc(var(--fs) - 1px);
   font-weight: 700;
   color: var(--ink);
   background: var(--surface-2);
@@ -309,7 +320,7 @@ button.link {
 
 .cab-name {
   font-weight: 700;
-  font-size: 13px;
+  font-size: var(--fs);
   margin-right: auto;
   min-width: 0;
   overflow: hidden;
@@ -375,7 +386,7 @@ button.link {
   box-shadow: var(--shadow);
 }
 
-table { border-collapse: collapse; width: 100%; font-size: 12.5px; }
+table { border-collapse: collapse; width: 100%; font-size: calc(var(--fs) - 0.5px); }
 
 th {
   text-align: left;
@@ -391,7 +402,7 @@ th {
   position: sticky;
   top: 0;
 }
-td { padding: 7px 12px; border-bottom: 1px solid var(--rule); vertical-align: top; }
+td { padding: 9px 12px; border-bottom: 1px solid var(--rule); vertical-align: top; }
 tbody tr:last-child td { border-bottom: 0; }
 tbody tr:hover { background: var(--surface-2); }
 
@@ -422,7 +433,7 @@ tbody tr.group-row:first-child td { border-top: 0; }
 .group-name {
   font-family: var(--f-display);
   font-weight: 700;
-  font-size: 14px;
+  font-size: calc(var(--fs) + 2px);
   letter-spacing: -.01em;
   color: var(--ink);
 }
@@ -438,7 +449,7 @@ tbody tr.group-row:first-child td { border-top: 0; }
   padding: 2px 7px;
 }
 
-.group-detail { font-size: 11.5px; color: var(--ink-soft); }
+.group-detail { font-size: calc(var(--fs) - 1.5px); color: var(--ink-soft); }
 
 .group-size {
   margin-left: auto;
@@ -535,4 +546,79 @@ details.settings > div { margin-top: 12px; }
 
 @media (prefers-reduced-motion: reduce) {
   * { animation: none !important; transition: none !important; }
+}
+
+
+/* ------------------------------------------------------------------ *
+ * Masthead tools
+ * ------------------------------------------------------------------ */
+
+.mast-tools {
+  display: flex;
+  align-items: flex-end;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.tool { display: flex; flex-direction: column; gap: 4px; }
+
+.tool-label {
+  font-size: calc(var(--fs) - 4px);
+  font-weight: 700;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+
+button.big {
+  font-size: var(--fs);
+  padding: 11px 18px;
+}
+
+/* ------------------------------------------------------------------ *
+ * Saved presets
+ * ------------------------------------------------------------------ */
+
+.presets { display: flex; flex-wrap: wrap; gap: 8px; }
+
+.preset {
+  display: flex;
+  align-items: stretch;
+  border: 1px solid var(--rule-strong);
+  border-left: 3px solid var(--accent);
+  border-radius: 3px;
+  background: var(--surface);
+  overflow: hidden;
+}
+
+.preset-use {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  text-align: left;
+  padding: 8px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.preset-use:hover { background: var(--accent-soft); }
+
+.preset-name { font-weight: 700; font-size: var(--fs); }
+.preset-sub {
+  font-size: calc(var(--fs) - 3px);
+  color: var(--ink-faint);
+  font-variant-numeric: tabular-nums;
+}
+
+.preset-remove {
+  border-left: 1px solid var(--rule);
+  border-radius: 0;
+  padding: 0 9px;
+}
+
+.muted-note {
+  margin: 0;
+  font-size: calc(var(--fs) - 1px);
+  color: var(--ink-soft);
+  line-height: 1.55;
 }

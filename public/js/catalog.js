@@ -70,6 +70,13 @@ export const FIELDS = {
     default: null,
     hint: 'Leave blank for the standard number.',
   },
+  kick: {
+    label: 'Kickplate',
+    type: 'number',
+    suffix: 'mm',
+    default: null,
+    hint: 'Leave blank for the job setting. Enter 0 for no kickplate.',
+  },
 };
 
 /**
@@ -85,9 +92,9 @@ export const FAMILIES = [
     widths: [150, 200, 300, 450, 500, 541, 600, 700, 750, 900, 1000, 1100, 1200],
     defaultWidth: 600,
     configs: [
-      { id: 'doors', label: 'Doors', fields: ['doors', 'shelves'] },
-      { id: 'drawers', label: 'Drawer stack', fields: ['drawers', 'runnerDepth'] },
-      { id: 'bin', label: 'Bin unit', fields: ['runnerDepth'] },
+      { id: 'doors', label: 'Doors', fields: ['doors', 'shelves', 'kick'] },
+      { id: 'drawers', label: 'Drawer stack', fields: ['drawers', 'runnerDepth', 'kick'] },
+      { id: 'bin', label: 'Bin unit', fields: ['runnerDepth', 'kick'] },
       { id: 'oven', label: 'Oven housing', fields: [] },
       { id: 'corner', label: 'Corner', fields: ['legWidth', 'shelves'], minWidth: 600 },
     ],
@@ -230,6 +237,7 @@ export const SIZE_FIELDS = [
 export const GLOBAL_FIELDS = [
   { id: 'floorHeight', label: 'Floor height', group: 'Floor units' },
   { id: 'floorDepth', label: 'Floor depth', group: 'Floor units' },
+  { id: 'kickHeight', label: 'Kickplate height', group: 'Floor units' },
   { id: 'wallTallHeight', label: 'Tall wall height', group: 'Wall units' },
   { id: 'wallStdHeight', label: 'Std wall height', group: 'Wall units' },
   { id: 'wallDepth', label: 'Wall depth', group: 'Wall units' },

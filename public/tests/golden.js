@@ -36,7 +36,12 @@ function comparePanels(expected, actual) {
 
 export function runGoldenMaster(fixtures) {
   const results = [];
-  const globals = { ...fixtures.globals, boardThickness: 16 };
+
+  // The original workbook has no concept of a plinth - kickplates were cut
+  // separately and never appeared on its cut list. Building with kickHeight 0
+  // keeps this a like-for-like comparison; the plinth is a deliberate addition
+  // covered by its own tests rather than a difference from the spreadsheet.
+  const globals = { ...fixtures.globals, boardThickness: 16, kickHeight: 0 };
 
   for (const block of fixtures.blocks) {
     const spec = BLOCK_MAP[block.block];

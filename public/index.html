@@ -18,11 +18,32 @@
   </div>
   <dl class="totals">
     <div><dt>Cabinets</dt><dd id="t-cabinets">0</dd></div>
-    <div><dt>Part lines</dt><dd id="t-lines">0</dd></div>
     <div><dt>Panels</dt><dd id="t-panels">0</dd></div>
     <div><dt>Board</dt><dd id="t-area">0.00 m²</dd></div>
     <div><dt>Edging</dt><dd id="t-edging">0.0 m</dd></div>
   </dl>
+
+  <div class="mast-tools">
+    <div class="tool">
+      <span class="tool-label">Text size</span>
+      <div class="seg" id="size-toggle">
+        <button type="button" data-size="normal" title="Normal text size">A</button>
+        <button type="button" data-size="large" title="Large text" style="font-size:15px">A</button>
+        <button type="button" data-size="xl" title="Extra large text" style="font-size:18px">A</button>
+      </div>
+    </div>
+    <div class="tool">
+      <span class="tool-label">Theme</span>
+      <div class="seg" id="theme-toggle">
+        <button type="button" data-theme="light">Light</button>
+        <button type="button" data-theme="dark">Dark</button>
+        <button type="button" data-theme="auto">Auto</button>
+      </div>
+    </div>
+    <button type="button" class="primary big" id="export-csv">
+      Download cutting list
+    </button>
+  </div>
 </header>
 
 <div class="layout">
@@ -98,9 +119,23 @@
           </div>
         </div>
         <div class="widths" id="a-widths"></div>
-        <button type="button" class="primary" id="a-add" style="width:100%;margin-top:12px">
+        <button type="button" class="primary big" id="a-add" style="width:100%;margin-top:12px">
           Add cabinet
         </button>
+      </div>
+    </section>
+
+    <section class="sec">
+      <div class="sec-head">
+        <h2>Your presets</h2>
+        <span class="count" id="preset-count"></span>
+      </div>
+      <div class="panel panel-pad">
+        <p class="muted-note" id="preset-empty">
+          Set a cabinet up the way you like it, then press <strong>Save as preset</strong>
+          on its card. It will appear here to add again in one click.
+        </p>
+        <div class="presets" id="preset-list"></div>
       </div>
     </section>
 

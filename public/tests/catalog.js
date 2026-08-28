@@ -71,6 +71,8 @@ test('every option a shape offers is one the engine reads', () => {
     legWidth: 800,
     aperture: 'double',
     apertureBottom: 1200,
+    // Zero removes the plinth, which is a visible change to the panel list.
+    kick: 0,
   };
 
   // Options that legitimately affect only the front list or validation, not

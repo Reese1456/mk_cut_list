@@ -6,9 +6,9 @@ Replaces the manual process of working through `new cut list master 2.xlsx` afte
 every kitchen design. You pick cabinets, it produces the panel list and a clean
 CSV for the board supplier.
 
-**Status: Phase 2 complete.** The engine is written and tested, and the
-interface works - a whole kitchen can be entered and its cutting list read on
-screen. CSV export and saved jobs are still to come.
+**Status: Phase 4 complete.** A whole kitchen can be entered, adjusted and
+exported as a CSV for the board supplier. Named jobs and import/export of a
+saved job are the remaining work.
 
 ---
 
@@ -72,6 +72,11 @@ python tools/extract_fixtures.py
 
 The left side is the kitchen, the right side is what to cut.
 
+Along the top are three things worth knowing about before anything else:
+**Text size** (three steps, for tired eyes), **Theme** (light, dark, or follow
+the computer), and **Download cutting list**, which is the button that produces
+the file for the supplier. All three remember what you chose.
+
 1. Fill in the client and reference. Tick **Gola** if the kitchen uses a gola
    profile - floor doors then lose 35 mm.
 2. Under **Add a cabinet**, pick a type and shape, click a standard width or
@@ -80,7 +85,10 @@ The left side is the kitchen, the right side is what to cut.
 3. Each cabinet gets a card. **Options** opens its settings - shelves, doors,
    drawer count, runner depth, return leg, oven aperture. Anything left blank
    uses the standard for that family.
-4. The cutting list updates as you go, in one of two views:
+4. Set a cabinet up the way you like it and press **Save as preset** on its
+   card. It appears under *Your presets* and can be added again in one click on
+   any future kitchen. Presets are stored on that computer.
+5. The cutting list updates as you go, in one of two views:
 
    - **By cabinet** - a section per cupboard with its size and settings in the
      heading, and the panels for *one unit* beneath it. This is the sheet the
@@ -90,6 +98,9 @@ The left side is the kitchen, the right side is what to cut.
 
    The cabinet card also states what it will cut - "Doors · 1 door · 3 shelves" -
    so a change to an option confirms itself without hunting for it in the list.
+   There is no save or apply button anywhere: everything recalculates as you
+   type.
+6. Press **Download cutting list** for the supplier's CSV.
 
 Anything that cannot be built is flagged rather than silently cut - a corner
 unit too narrow for its return, an oven housing too short for the appliance, a
@@ -110,6 +121,7 @@ Everything derives from a handful of job dimensions plus one cabinet width.
 | Symbol | Meaning | Default |
 |---|---|---|
 | FH / FD | Floor unit height and depth | 720 / 560 |
+| Kick | Plinth height under the floor units | 100 |
 | WH₁ / WH₂ | Wall unit height, tall and standard | 1080 / 720 |
 | WD | Wall unit depth | 300 |
 | TH / TD | Tall unit height and depth | 2296 / 580 |
@@ -156,6 +168,23 @@ Every override is optional. Leave one out and the family default applies.
 `runnerDepth`, `cleats`, `back`, `legWidth`, and for eye level ovens
 `aperture` and `apertureBottom`.
 
+### Floor units and plinths
+
+Floor units are built one of two ways, and the two settings are independent so
+either can be changed on its own:
+
+| Carcass | Plinth | Finished height |
+|---|---|---|
+| 720 | 150 | 870 |
+| 780 | 100 | 880 |
+
+Every floor unit gets a `kickplate` panel the full width of the cabinet, banded
+along its top edge, which is the one you see above the floor. Set a cabinet's
+**Kickplate** option to `0` where the plinth runs on from its neighbour, or
+change the job-wide height under **Job dimensions**.
+
+Kickplates never appear on wall, tall or built-in cupboard units.
+
 ### Eye level ovens
 
 Structurally a grocery carcass with an appliance aperture between its two fixed
@@ -176,6 +205,41 @@ for a non-standard appliance.
 Built-in ovens are about 595 mm wide and are made to drop into a **600 mm**
 cabinet. The engine warns below that. The original input sheet listed elo at
 600 and 750 - the 750 is worth querying.
+
+---
+
+## The export
+
+**Download cutting list** produces a CSV named for the job, for example
+`MKitchens_CutList_Adnaan_KIT-0417_2026-08-28.csv`.
+
+```
+Name,Length,Width,Quantity,Material,Thickness,L1,L2,W1,W2,Edging,Cabinet,Part
+F600 2-door sides,720,560,4,White Melamine,16,Y,,,,White 22mm,F600 2-door,sides
+F600 2-door base,568,560,2,White Melamine,16,Y,,,,White 22mm,F600 2-door,base
+F600 2-door back,703,568,2,White Melamine,16,,,,,,F600 2-door,back
+```
+
+Identical panels are merged across the whole kitchen with a summed quantity,
+which is what the supplier wants.
+
+`L1`, `L2`, `W1`, `W2` are the trade's names for the four edges of a panel -
+the two long edges, then the two short ones. A shelf is banded `L1`; a cabinet
+side is banded `L1` and `W1`; a drawer base has none.
+
+`Name`, `Length`, `Width`, `Quantity` and `Material` are the five fields MaxCut
+needs to import a job, so the same file opens as a plain table in Excel and
+imports into MaxCut without being edited first.
+
+There is deliberately **no grain column**. Grain runs the long way - up the
+height of a door or panel - and the supplier reads that off the dimensions,
+which is why every part leaves the engine with its longer side first.
+
+### What this deliberately does not do
+
+It does not nest parts onto sheets. MaxCut, and the supplier, already do that
+better than we could. This produces the accurate parts list that feeds them,
+which is the step the spreadsheet was doing by hand.
 
 ---
 
@@ -263,10 +327,12 @@ a client name and per-square-metre pricing.
 public/                    <- the published site
   index.html               the app
   css/app.css              interface styles
+  css/app.css              interface styles, including the text-size steps
   js/
     constants.js           every dimension and construction constant, named
     rules.js               the engine - pure functions, no DOM, no state
     catalog.js             what the interface offers: types, shapes, widths
+    csv.js                 the supplier export
     app.js                 interface wiring - holds no maths
   tests.html               the checks, in a browser
   tests/
@@ -292,6 +358,7 @@ new cut list master 2.xlsx  the original - kept for provenance, never served
 | A dimension or construction rule | `js/constants.js` |
 | How a cabinet is built | `js/rules.js` |
 | What types, shapes or widths are offered | `js/catalog.js` |
+| The export columns | `js/csv.js` |
 | Wording, layout, behaviour | `js/app.js`, `css/app.css` |
 
 `rules.js` never touches the page and `app.js` never calculates a panel size.
@@ -306,8 +373,8 @@ Keeping that line is what makes the whole thing testable.
 | 1 | Engine and tests | **done** |
 | 2 | Working interface - job settings, add cabinets, live parts table | **done** |
 | 3 | Standard-width presets and the per-cabinet override panel | **done** |
-| 4 | CSV export, print view, edging totals | next |
-| 5 | Named jobs, import and export | |
+| 4 | CSV export for the supplier | **done** |
+| 5 | Named jobs, import and export | next |
 
 Held back for a later version: doors and drawer fronts, per-m² pricing, and
 hardware counts. The front geometry is already decoded and implemented in

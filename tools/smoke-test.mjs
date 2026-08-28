@@ -74,9 +74,15 @@ class El {
     }
   }
   appendChild(n) { this.append(n); return n; }
+  remove() {
+    if (!this.parentNode) return;
+    this.parentNode.children = this.parentNode.children.filter((c) => c !== this);
+    this.parentNode = null;
+  }
   replaceChildren(...nodes) { this.children = []; this.append(...nodes); }
   setAttribute(k, v) { this.attrs[k] = String(v); }
   getAttribute(k) { return this.attrs[k]; }
+  removeAttribute(k) { delete this.attrs[k]; }
   addEventListener(type, fn) { (this.listeners[type] ||= []).push(fn); }
   removeEventListener() {}
   focus() {}
@@ -119,7 +125,12 @@ class El {
 
 const byId = new Map();
 
+const documentElement = new El('html');
+const bodyEl = new El('body');
+
 const document = {
+  documentElement,
+  body: bodyEl,
   createElement: (tag) => new El(tag),
   querySelector(sel) {
     if (sel.startsWith('#')) {
@@ -140,10 +151,54 @@ const document = {
 
 /* Build the elements index.html declares, from the file itself. */
 const html = readFileSync(join(ROOT, 'public', 'index.html'), 'utf8');
+
+/** The substring an element occupies, found by counting its own tag. */
+function innerHtmlOf(source, tag, openIndex) {
+  const open = new RegExp(`<${tag}\\b`, 'g');
+  const close = new RegExp(`</${tag}>`, 'g');
+  const start = source.indexOf('>', openIndex) + 1;
+
+  let depth = 1;
+  let cursor = start;
+  while (depth > 0 && cursor < source.length) {
+    open.lastIndex = cursor;
+    close.lastIndex = cursor;
+    const nextOpen = open.exec(source);
+    const nextClose = close.exec(source);
+    if (!nextClose) break;
+    if (nextOpen && nextOpen.index < nextClose.index) {
+      depth++;
+      cursor = nextOpen.index + 1;
+    } else {
+      depth--;
+      cursor = nextClose.index + 1;
+      if (depth === 0) return source.slice(start, nextClose.index);
+    }
+  }
+  return source.slice(start, cursor);
+}
+
 for (const m of html.matchAll(/<(\w+)[^>]*\bid="([A-Za-z0-9_-]+)"/g)) {
   const node = new El(m[1]);
   node.id = m[2];
   byId.set(m[2], node);
+
+  // Buttons declared in the markup - the view, theme and size toggles - need
+  // to exist as children, since the app finds them by querying the container.
+  const inner = innerHtmlOf(html, m[1], m.index);
+  for (const b of inner.matchAll(/<button\b([^>]*)>/g)) {
+    const button = new El('button');
+    for (const attr of b[1].matchAll(/([a-zA-Z-]+)="([^"]*)"/g)) {
+      const [, name, value] = attr;
+      if (name.startsWith('data-')) {
+        const key = name.slice(5).replace(/-([a-z])/g, (_, c) => c.toUpperCase());
+        button.dataset[key] = value;
+      } else if (name === 'class') {
+        button.className = value;
+      }
+    }
+    node.append(button);
+  }
 }
 
 const store = new Map();
@@ -154,6 +209,10 @@ globalThis.localStorage = {
   removeItem: (k) => store.delete(k),
 };
 globalThis.confirm = () => true;
+globalThis.alert = () => {};
+globalThis.prompt = (_msg, suggested) => suggested ?? 'Preset';
+globalThis.Blob = class { constructor(parts) { this.parts = parts; } };
+globalThis.URL = { createObjectURL: () => 'blob:test', revokeObjectURL: () => {} };
 globalThis.HTMLElement = El;
 
 /* ---------------- drive it ---------------- */
@@ -187,7 +246,7 @@ check('shape dropdown was populated', cfgSelect.children.length > 0,
   `${cfgSelect.children.length} options`);
 check('width defaulted', Number(widthInput.value) > 0, `value="${widthInput.value}"`);
 check('standard-width chips rendered', byId.get('a-widths').children.length > 0);
-check('job dimension fields rendered', byId.get('globals').children.length === 10,
+check('job dimension fields rendered', byId.get('globals').children.length === 11,
   `${byId.get('globals').children.length} fields`);
 check('cabinet list starts empty', cabList.children.length === 1
   && cabList.children[0].className === 'empty');
@@ -211,11 +270,13 @@ await new Promise((r) => setTimeout(r, 400)); // the draft save is debounced
 check('draft was saved', store.size > 0);
 
 /* a second cabinet of the same kind should consolidate */
-const linesAfterOne = Number(byId.get('t-lines').textContent);
+const linesAfterOne = byId.get('parts-count').textContent;
 addButton.fire('click');
-const linesAfterTwo = Number(byId.get('t-lines').textContent);
+const linesAfterTwo = byId.get('parts-count').textContent;
+const lineCount = (t) => Number(String(t).match(/^(\d+)/)?.[1] ?? 0);
 check('identical cabinets consolidate to the same lines',
-  linesAfterOne === linesAfterTwo, `${linesAfterOne} then ${linesAfterTwo}`);
+  lineCount(linesAfterOne) === lineCount(linesAfterTwo),
+  `"${linesAfterOne}" then "${linesAfterTwo}"`);
 check('two cabinets are listed', cabList.children.length === 2,
   `${cabList.children.length} cards`);
 
@@ -301,6 +362,80 @@ if (!shelvesInput) {
       byId.get('t-area').textContent === standardArea,
       `expected ${standardArea}, got ${byId.get('t-area').textContent}`);
   }
+}
+
+/* the text size and theme controls stamp the root element */
+{
+  const sizeButtons = byId.get('size-toggle').querySelectorAll('button');
+  const themeButtons = byId.get('theme-toggle').querySelectorAll('button');
+  check('display controls rendered',
+    sizeButtons.length === 3 && themeButtons.length === 3,
+    `${sizeButtons.length} sizes, ${themeButtons.length} themes`);
+
+  const large = sizeButtons.find((b) => b.dataset.size === 'large');
+  byId.get('size-toggle').fire('click', { target: large });
+  check('choosing a text size stamps the page',
+    document.documentElement.getAttribute('data-size') === 'large',
+    `data-size="${document.documentElement.getAttribute('data-size')}"`);
+
+  const light = themeButtons.find((b) => b.dataset.theme === 'light');
+  byId.get('theme-toggle').fire('click', { target: light });
+  check('choosing a theme stamps the page',
+    document.documentElement.getAttribute('data-theme') === 'light',
+    `data-theme="${document.documentElement.getAttribute('data-theme')}"`);
+
+  const auto = themeButtons.find((b) => b.dataset.theme === 'auto');
+  byId.get('theme-toggle').fire('click', { target: auto });
+  check('auto theme leaves the page unstamped',
+    document.documentElement.getAttribute('data-theme') === undefined,
+    `data-theme="${document.documentElement.getAttribute('data-theme')}"`);
+}
+
+/* saving and reusing a preset */
+{
+  const before = state1Count();
+  const saveButton = firstCard.children[1].descendants()
+    .find((n) => n.tagName === 'BUTTON' && n.textContent === 'Save as preset');
+  check('cabinets can be saved as a preset', !!saveButton);
+
+  if (saveButton) {
+    saveButton.fire('click');
+    const chips = byId.get('preset-list').children;
+    check('a saved preset appears in the list', chips.length === 1,
+      `${chips.length} presets`);
+
+    if (chips.length) {
+      const use = chips[0].children.find((c) => c.className === 'preset-use');
+      use.fire('click');
+      check('clicking a preset adds that cabinet',
+        state1Count() === before + 1,
+        `${before} then ${state1Count()}`);
+    }
+  }
+}
+
+function state1Count() {
+  return cabList.children.filter((c) => (c.className || '').includes('cab')).length;
+}
+
+/* the export button produces a file */
+{
+  let downloaded = null;
+  const realCreate = document.createElement;
+  document.createElement = (tag) => {
+    const node = realCreate(tag);
+    if (String(tag).toLowerCase() === 'a') {
+      node.click = () => { downloaded = node.download; };
+    }
+    return node;
+  };
+
+  byId.get('export-csv').fire('click');
+  document.createElement = realCreate;
+
+  check('the export button downloads a cutting list',
+    typeof downloaded === 'string' && downloaded.endsWith('.csv'),
+    `filename ${downloaded}`);
 }
 
 console.log(failures ? `\n${failures} failed.\n` : '\nAll interface checks passed.\n');

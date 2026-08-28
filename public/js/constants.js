@@ -15,6 +15,10 @@ export const DEFAULT_GLOBALS = {
   floorHeight: 720,
   floorDepth: 560,
 
+  /** Plinth under the floor units. Carcass height plus this is the finished
+   *  height the worktop sits on. */
+  kickHeight: 100,
+
   wallTallHeight: 1080,
   wallStdHeight: 720,
   wallDepth: 300,
@@ -69,6 +73,9 @@ export const K = {
   /** Built-in cupboards share dividers between bays, so only one thickness is lost. */
   bicShelfReduction: 16,
 
+  /** How far the plinth is set back from the front of a floor unit. */
+  kickRecess: 50,
+
   /** Depth of a built-in cupboard cleat. */
   bicCleatDepth: 100,
 };
@@ -84,6 +91,18 @@ export const OVEN_APERTURES = {
   double: 890,
   compact: 450, // microwave, combi oven, coffee machine, warming drawer
 };
+
+/**
+ * The two floor-unit builds MKitchens uses. Carcass height and plinth height
+ * are set separately - these are the pairs worth putting one click away.
+ */
+export const FLOOR_BUILDS = [
+  { carcass: 720, kick: 150, label: '720 carcass + 150 kick' },
+  { carcass: 780, kick: 100, label: '780 carcass + 100 kick' },
+];
+
+/** Plinth heights offered as quick picks. */
+export const KICK_HEIGHTS = [100, 150];
 
 /** Standard melamine sheet. Used only to warn when a part cannot be cut. */
 export const SHEET = {

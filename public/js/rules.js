@@ -96,7 +96,7 @@ export function resolve(cab, globals = DEFAULT_GLOBALS) {
  * Floor unit carcass: two sides, a base, an optional shelf, a cleat and a back.
  * The back sits above the base, so it loses less height than a wall unit's.
  */
-function floorCarcass({ W, H, D, T }, { shelves = 1, cleats = 1, back = true }) {
+function floorCarcass({ W, H, D, T }, { shelves = 1, cleats = 1, back = true, kick = 0 }) {
   const inner = W - 2 * T;
   const parts = [
     panel('sides', 2, H, D, 1, 0),
@@ -105,6 +105,11 @@ function floorCarcass({ W, H, D, T }, { shelves = 1, cleats = 1, back = true }) 
   if (shelves > 0) parts.push(panel('shelf', shelves, inner, D - K.shelfSetback, 1, 0));
   if (cleats > 0) parts.push(panel('cleat', cleats, inner, K.cleatDepth, 1, 0));
   if (back) parts.push(panel('back', 1, H - K.floorBackReduction, inner, 0, 0));
+
+  // The plinth runs the full width of the unit and is banded along its top
+  // edge, which is the one you see above the floor.
+  if (kick > 0) parts.push(panel('kickplate', 1, W, kick, 1, 0));
+
   return parts;
 }
 
@@ -234,14 +239,24 @@ const BUILDERS = {
   /* ---- floor ---- */
 
   'floor/doors': (d, o) =>
-    floorCarcass(d, { shelves: o.shelves ?? 1, cleats: o.cleats ?? 1, back: o.back ?? true }),
+    floorCarcass(d, {
+      shelves: o.shelves ?? 1,
+      cleats: o.cleats ?? 1,
+      back: o.back ?? true,
+      kick: kickHeight(d, o),
+    }),
 
   'floor/drawers': (d, o) => {
     const n = o.drawers ?? 4;
     const stack = DRAWER_STACKS[n];
     if (!stack) throw new Error(`No standard stack for ${n} drawers`);
     return [
-      ...floorCarcass(d, { shelves: o.shelves ?? 0, cleats: o.cleats ?? 1, back: o.back ?? true }),
+      ...floorCarcass(d, {
+        shelves: o.shelves ?? 0,
+        cleats: o.cleats ?? 1,
+        back: o.back ?? true,
+        kick: kickHeight(d, o),
+      }),
       ...drawerParts(d, stack, o.runnerDepth ?? 500),
     ];
   },
@@ -256,7 +271,12 @@ const BUILDERS = {
     const runner = o.runnerDepth ?? 500;
     const boxWidth = d.W - 2 * d.T - K.drawerRunnerAllowance;
     return [
-      ...floorCarcass(d, { shelves: o.shelves ?? 0, cleats: o.cleats ?? 1, back: o.back ?? true }),
+      ...floorCarcass(d, {
+        shelves: o.shelves ?? 0,
+        cleats: o.cleats ?? 1,
+        back: o.back ?? true,
+        kick: kickHeight(d, o),
+      }),
       panel('draw inner fr back', 2, 400, boxWidth, 2, 1),
       panel('draw base', 1, boxWidth, runner - 2 * d.T, 0, 0),
       panel('draw sides', 2, runner, K.drawerBoxDeep, 1, 0),
@@ -382,6 +402,16 @@ const BUILDERS = {
     ];
   },
 };
+
+/**
+ * The plinth height for a cabinet: its own setting if it has one, otherwise
+ * the job's. Zero means this unit sits on legs or on another unit and needs
+ * no plinth of its own.
+ */
+function kickHeight(d, o) {
+  const value = o.kick ?? d.globals.kickHeight ?? 0;
+  return Number.isFinite(value) && value > 0 ? value : 0;
+}
 
 /** Which builder handles a given cabinet. */
 function builderKey(cab) {

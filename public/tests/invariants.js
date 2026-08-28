@@ -163,6 +163,51 @@ test('a drawer front stack fills the cabinet height exactly', () => {
   }
 });
 
+test('floor units get a plinth sized from the job setting', () => {
+  for (const [carcass, kick] of [[720, 150], [780, 100]]) {
+    const cab = {
+      type: 'floor', config: 'doors', width: 900,
+      overrides: { doors: 2 }, qty: 1,
+    };
+    const { parts } = expandCabinet(cab, {
+      ...DEFAULT_GLOBALS, floorHeight: carcass, kickHeight: kick,
+    });
+
+    const plinth = parts.find((p) => p.desc === 'kickplate');
+    assert(plinth, `no kickplate for a ${carcass}/${kick} floor unit`);
+    assert(plinth.l === 900 && plinth.w === kick,
+      `kickplate is ${plinth.l}x${plinth.w}, expected 900x${kick}`);
+    assert(plinth.eL === 1,
+      'the kickplate should be banded along its visible top edge');
+
+    const side = parts.find((p) => p.desc === 'sides');
+    assert(side.l === carcass,
+      `sides are ${side.l} high, expected ${carcass}`);
+  }
+});
+
+test('a cabinet can opt out of its plinth', () => {
+  const { parts } = expandCabinet({
+    type: 'floor', config: 'doors', width: 600,
+    overrides: { doors: 1, kick: 0 }, qty: 1,
+  }, { ...DEFAULT_GLOBALS, kickHeight: 150 });
+
+  assert(!parts.some((p) => p.desc === 'kickplate'),
+    'kick 0 should remove the plinth');
+});
+
+test('only floor units get a plinth', () => {
+  for (const type of ['wallTall', 'wallStd', 'tall', 'bic']) {
+    const config = { wallTall: 'doors', wallStd: 'doors', tall: 'grocery', bic: 'run' }[type];
+    const { parts } = expandCabinet(
+      { type, config, width: 600, overrides: {}, qty: 1 },
+      { ...DEFAULT_GLOBALS, kickHeight: 150 },
+    );
+    assert(!parts.some((p) => p.desc === 'kickplate'),
+      `${type} should not have a plinth`);
+  }
+});
+
 test('gola reduces floor doors and nothing else', () => {
   const withGola = { ...DEFAULT_GLOBALS, gola: true };
   const plain = { ...DEFAULT_GLOBALS, gola: false };
