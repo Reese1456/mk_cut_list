@@ -28,6 +28,9 @@ const CASES = [
   { type: 'tall',     config: 'broom',   overrides: {} },
   { type: 'tall',     config: 'elo',     overrides: {} },
   { type: 'bic',      config: 'run',     overrides: { shelves: 3 } },
+  { type: 'floor',    config: 'corner',  overrides: {} },
+  { type: 'wallTall', config: 'corner',  overrides: {} },
+  { type: 'tall',     config: 'corner',  overrides: {} },
 ];
 
 const FROM = 100;

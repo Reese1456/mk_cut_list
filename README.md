@@ -6,8 +6,9 @@ Replaces the manual process of working through `new cut list master 2.xlsx` afte
 every kitchen design. You pick cabinets, it produces the panel list and a clean
 CSV for the board supplier.
 
-**Status: Phase 1 complete.** The calculation engine is written and tested. The
-user interface is not built yet.
+**Status: Phase 2 complete.** The engine is written and tested, and the
+interface works - a whole kitchen can be entered and its cutting list read on
+screen. CSV export and saved jobs are still to come.
 
 ---
 
@@ -34,23 +35,28 @@ document.
 Everything is plain JavaScript. There is no build step and nothing to install
 for the app itself.
 
-### The tests
+### The app
 
-```
-node public/tests/run.js            # run every check
-node public/tests/run.js --diffs    # also list every value that differs from the spreadsheet
-```
-
-Or open `public/tests.html` in a browser, which needs no Node at all:
+Open `public/index.html` through any web server - it needs one because the code
+is split into modules:
 
 ```
 cd public && python -m http.server 8000
 ```
 
-then visit `http://localhost:8000/tests.html`.
+then visit `http://localhost:8000`.
 
-Once deployed, the same page is live on the site, so the calculations can be
-verified at any time without any tools.
+### The tests
+
+```
+npm test                            # engine, catalogue and interface
+node public/tests/run.js --diffs    # also list every value that differs from the spreadsheet
+npm run smoke                       # just the interface load test
+```
+
+The same checks run in a browser at `/tests.html`, with no Node needed. That
+page is live on the deployed site, so the calculations can be verified at any
+time from any machine.
 
 ### Regenerating the fixtures
 
@@ -59,6 +65,34 @@ Only needed if the original workbook changes. Requires Python and `openpyxl`.
 ```
 python tools/extract_fixtures.py
 ```
+
+---
+
+## Using it
+
+The left side is the kitchen, the right side is what to cut.
+
+1. Fill in the client and reference. Tick **Gola** if the kitchen uses a gola
+   profile - floor doors then lose 35 mm.
+2. Under **Add a cabinet**, pick a type and shape, click a standard width or
+   type any width at all, set a quantity, and press Add. Enter adds it too, so
+   a whole run can be typed without touching the mouse.
+3. Each cabinet gets a card. **Options** opens its settings - shelves, doors,
+   drawer count, runner depth, return leg, oven aperture. Anything left blank
+   uses the standard for that family.
+4. The cutting list updates as you go. **Consolidated** merges identical panels
+   across the whole kitchen, which is what the supplier wants; **By cabinet**
+   groups them per unit, which is what the workshop wants.
+
+Anything that cannot be built is flagged rather than silently cut - a corner
+unit too narrow for its return, an oven housing too short for the appliance, a
+panel bigger than a sheet.
+
+**Job dimensions** holds the heights and depths every cabinet is derived from.
+Changing one re-cuts the whole kitchen.
+
+The kitchen you are working on is kept in the browser so a refresh does not lose
+it. Named jobs, and moving a job between machines, come in phase 5.
 
 ---
 
@@ -169,10 +203,21 @@ fault number. Anything else is a failure.
 internal width is always `W - 2T`, the back fits its opening, a drawer front
 stack fills the cabinet height exactly, quantities survive consolidation.
 
+**Catalogue** (`tests/catalog.js`) - walks every type, shape and standard width
+the interface offers and checks the engine can build it. It also checks that
+every option actually changes something: a control that looks live but does
+nothing is worse than no control at all. This caught two real faults - a corner
+unit offered at widths that produced a negative panel, and an oven housing
+offered too narrow for any oven.
+
 **Width sweep** (`sweep.js`) - every family and configuration built at every
-width from 100 mm to 1200 mm. Around 15,000 cabinets and 80,000 panels. The
+width from 100 mm to 1200 mm. Around 18,700 cabinets and 96,000 panels. The
 rule is not that every width is buildable - a 60 mm cabinet is not - but that
 the engine never produces a bad panel *silently*.
+
+**Interface smoke test** (`tools/smoke-test.mjs`) - loads the app against a
+small DOM shim, adds cabinets and checks a cutting list comes out. It exists to
+catch a load-time error, which would otherwise show as a blank page.
 
 There is a fourth layer no test can cover: **run a kitchen that has already
 been built through the engine and compare the result to what actually went to
@@ -209,10 +254,13 @@ a client name and per-square-metre pricing.
 
 ```
 public/                    <- the published site
-  index.html               the app (phase 2)
+  index.html               the app
+  css/app.css              interface styles
   js/
     constants.js           every dimension and construction constant, named
     rules.js               the engine - pure functions, no DOM, no state
+    catalog.js             what the interface offers: types, shapes, widths
+    app.js                 interface wiring - holds no maths
   tests.html               the checks, in a browser
   tests/
     fixtures.js            56 cabinet blocks lifted from the workbook (generated)
@@ -220,13 +268,27 @@ public/                    <- the published site
     diff-allowlist.js      accepted differences, each with a reason
     golden.js              golden-master comparison
     invariants.js          property checks
+    catalog.js             checks every offered option against the engine
     sweep.js               width sweep
     run.js                 command-line runner
 
 tools/
   extract_fixtures.py      regenerates fixtures.js from the workbook
+  smoke-test.mjs           loads the interface headlessly to catch a blank page
 new cut list master 2.xlsx  the original - kept for provenance, never served
 ```
+
+### Where to change things
+
+| To change | Edit |
+|---|---|
+| A dimension or construction rule | `js/constants.js` |
+| How a cabinet is built | `js/rules.js` |
+| What types, shapes or widths are offered | `js/catalog.js` |
+| Wording, layout, behaviour | `js/app.js`, `css/app.css` |
+
+`rules.js` never touches the page and `app.js` never calculates a panel size.
+Keeping that line is what makes the whole thing testable.
 
 ---
 
@@ -235,10 +297,10 @@ new cut list master 2.xlsx  the original - kept for provenance, never served
 | Phase | | |
 |---|---|---|
 | 1 | Engine and tests | **done** |
-| 2 | Working interface - job settings, add cabinets, live parts table | |
-| 3 | Standard-width presets and the per-cabinet override panel | |
-| 4 | CSV export, print view, edging totals | |
-| 5 | Save and load jobs, deploy to Render | |
+| 2 | Working interface - job settings, add cabinets, live parts table | **done** |
+| 3 | Standard-width presets and the per-cabinet override panel | **done** |
+| 4 | CSV export, print view, edging totals | next |
+| 5 | Named jobs, import and export | |
 
 Held back for a later version: doors and drawer fronts, per-m² pricing, and
 hardware counts. The front geometry is already decoded and implemented in
@@ -278,3 +340,5 @@ the interface work.
 7. A 745 wall unit gives two 369.5 mm doors. Round to 369, or is 745 a typo
    for 750?
 8. The 290 std wall has no shelf, but its 200 mm neighbour does. Omission?
+9. Minimum widths are set at 600 for floor and tall corners, 450 for wall
+   corners and 600 for oven housings. Are those the right cut-offs?

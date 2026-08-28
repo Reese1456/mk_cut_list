@@ -90,6 +90,7 @@
   <header>
     <h1>Cutting checks</h1>
     <p class="sub">Every calculation in the MKitchens cutlist engine, verified against the original workbook.</p>
+    <p class="sub" style="margin-top:6px"><a href="index.html" style="color:var(--accent)">&larr; Back to the cutlist</a></p>
     <div id="verdict" class="verdict">Running&hellip;</div>
   </header>
   <div id="out"></div>
@@ -102,6 +103,7 @@
 import { FIXTURES } from './tests/fixtures.js';
 import { runGoldenMaster } from './tests/golden.js';
 import { runInvariants } from './tests/invariants.js';
+import { runCatalogTests } from './tests/catalog.js';
 import { runSweep } from './tests/sweep.js';
 import { allChanges } from './tests/diff-allowlist.js';
 
@@ -158,7 +160,23 @@ for (const r of inv) {
 }
 out.append(s2);
 
-/* ---- 3. sweep ---- */
+/* ---- 3. catalogue ---- */
+const cat = runCatalogTests();
+failures += cat.filter((r) => r.status !== 'pass').length;
+
+const s2b = el('section');
+s2b.append(el('h2', null, 'Catalogue'));
+s2b.append(el('p', 'note', 'Every cabinet type, shape and standard width the interface offers, checked against the engine.'));
+for (const r of cat) {
+  const row = el('div', 'row');
+  row.append(el('span', `tag ${r.status === 'pass' ? 't-pass' : 't-fail'}`, r.status));
+  row.append(el('span', null, esc(r.name)));
+  s2b.append(row);
+  if (r.detail) s2b.append(el('div', 'detail', esc(r.detail)));
+}
+out.append(s2b);
+
+/* ---- 4. sweep ---- */
 const sweep = runSweep();
 failures += sweep.failureCount;
 
@@ -174,7 +192,7 @@ s3.append(el('div', 'stats', `
 for (const f of sweep.failures) s3.append(el('div', 'detail', esc(f)));
 out.append(s3);
 
-/* ---- 4. accepted changes ---- */
+/* ---- 5. accepted changes ---- */
 const changes = allChanges();
 const s4 = el('section');
 s4.append(el('h2', null, 'Accepted changes'));

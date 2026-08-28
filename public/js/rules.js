@@ -415,6 +415,21 @@ export function validate(cab, globals = DEFAULT_GLOBALS) {
     warnings.push(`Width ${d.W} mm is not a whole millimetre.`);
   }
 
+  // Corner units set their return back panel off the adjacent leg, so a
+  // narrow corner would produce a back with no width at all.
+  if (cab.config === 'corner') {
+    const leg = o.legWidth ?? d.W;
+    const minimum = K.cornerBackOffset + 2 * d.T;
+    for (const [name, value] of [['width', d.W], ['return leg', leg]]) {
+      if (value <= minimum) {
+        warnings.push(
+          `A corner unit needs a ${name} over ${minimum} mm - the return back ` +
+          `panel is set ${K.cornerBackOffset} mm off the adjacent leg. This one is ${value} mm.`,
+        );
+      }
+    }
+  }
+
   // Eye level ovens: does the appliance actually fit the carcass?
   if (cab.config === 'elo') {
     const aperture = typeof o.aperture === 'number'

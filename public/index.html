@@ -6,94 +6,139 @@
 <title>MKitchens Cutlist Manager</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@600;700&family=JetBrains+Mono:wght@400;700&display=swap">
-<style>
-  :root{
-    --ground:#F6F6F3; --surface:#FFF; --ink:#191E24; --ink-soft:#5C6470;
-    --ink-faint:#8A919B; --rule:#DDDDD5; --accent:#A9662F;
-    --ok:#356043; --ok-soft:#DDEADF;
-  }
-  @media (prefers-color-scheme:dark){
-    :root:not([data-theme="light"]){
-      --ground:#14171B; --surface:#1B1F24; --ink:#E8E7E2; --ink-soft:#A2AAB5;
-      --ink-faint:#767E89; --rule:#2E343B; --accent:#D28F52;
-      --ok:#7FB68F; --ok-soft:#1B2A20;
-    }
-  }
-  *{box-sizing:border-box}
-  body{
-    margin:0; background:var(--ground); color:var(--ink);
-    font-family:"JetBrains Mono",ui-monospace,Consolas,monospace;
-    font-size:14px; line-height:1.65; padding:0 24px 80px;
-  }
-  .wrap{max-width:680px;margin:0 auto}
-  header{border-bottom:2px solid var(--ink);padding:72px 0 22px;margin-bottom:32px}
-  .eyebrow{
-    font-size:11px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;
-    color:var(--accent);margin:0 0 16px;
-  }
-  h1{
-    font-family:Archivo,system-ui,sans-serif;font-weight:700;
-    font-size:clamp(2rem,5vw,3rem);letter-spacing:-.025em;margin:0 0 14px;line-height:1.05;
-  }
-  .sub{color:var(--ink-soft);margin:0;font-size:15px}
-  .status{
-    display:inline-block;background:var(--ok-soft);color:var(--ok);
-    border:1px solid var(--ok);border-radius:3px;padding:4px 10px;
-    font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;
-    margin-bottom:24px;
-  }
-  h2{
-    font-family:Archivo,system-ui,sans-serif;font-size:1.05rem;font-weight:700;
-    margin:36px 0 10px;padding-left:12px;border-left:3px solid var(--accent);
-  }
-  p{margin:0 0 14px}
-  ol{padding-left:20px;margin:0 0 14px}
-  li{margin-bottom:6px}
-  li.done{color:var(--ink-faint);text-decoration:line-through}
-  a{color:var(--accent);font-weight:700}
-  .card{
-    background:var(--surface);border:1px solid var(--rule);border-radius:3px;
-    padding:18px 22px;margin-top:8px;
-  }
-  footer{
-    margin-top:56px;padding-top:18px;border-top:2px solid var(--ink);
-    color:var(--ink-faint);font-size:11.5px;
-  }
-</style>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@600;700&family=JetBrains+Mono:wght@400;500;700&display=swap">
+<link rel="stylesheet" href="css/app.css">
 </head>
 <body>
-<div class="wrap">
-  <header>
-    <p class="eyebrow">MKitchens</p>
+
+<header class="masthead">
+  <div class="brand">
     <h1>Cutlist Manager</h1>
-    <p class="sub">Cutting lists for kitchen carcasses in 16&nbsp;mm melamine board.</p>
-  </header>
+    <span class="tag">MKitchens</span>
+  </div>
+  <dl class="totals">
+    <div><dt>Cabinets</dt><dd id="t-cabinets">0</dd></div>
+    <div><dt>Part lines</dt><dd id="t-lines">0</dd></div>
+    <div><dt>Panels</dt><dd id="t-panels">0</dd></div>
+    <div><dt>Board</dt><dd id="t-area">0.00 m²</dd></div>
+    <div><dt>Edging</dt><dd id="t-edging">0.0 m</dd></div>
+  </dl>
+</header>
 
-  <span class="status">Phase 1 &mdash; engine complete</span>
+<div class="layout">
 
-  <p>The calculation engine is built and tested. The interface for entering a kitchen is next.</p>
+  <!-- ---------------------------------------------------------------- -->
+  <!-- Input                                                             -->
+  <!-- ---------------------------------------------------------------- -->
+  <div class="pane-input">
 
-  <div class="card">
-    <p style="margin:0"><strong>Verify the maths &rarr;</strong> <a href="tests.html">Run the checks</a></p>
-    <p style="margin:6px 0 0;color:var(--ink-soft);font-size:13px">
-      Rebuilds all 56 cabinets from the original spreadsheet and compares every panel.
-      Runs in your browser, nothing to install.
-    </p>
+    <section class="sec">
+      <div class="sec-head"><h2>Job</h2></div>
+      <div class="panel panel-pad">
+        <div class="grid grid-2">
+          <div class="field">
+            <label for="j-client">Client</label>
+            <input type="text" id="j-client" placeholder="Name">
+          </div>
+          <div class="field">
+            <label for="j-ref">Reference</label>
+            <input type="text" id="j-ref" placeholder="Job number">
+          </div>
+          <div class="field">
+            <label for="j-board">Board colour</label>
+            <input type="text" id="j-board" placeholder="White">
+          </div>
+          <div class="field">
+            <label for="j-edge">Edge colour</label>
+            <input type="text" id="j-edge" placeholder="White">
+          </div>
+        </div>
+        <div class="check" style="margin-top:12px">
+          <input type="checkbox" id="j-gola">
+          <label for="j-gola">Gola kitchen &mdash; floor doors lose 35&nbsp;mm</label>
+        </div>
+      </div>
+    </section>
+
+    <section class="sec">
+      <details class="settings">
+        <summary>Job dimensions</summary>
+        <div class="panel panel-pad">
+          <div id="globals" class="grid grid-2"></div>
+          <button type="button" class="link" id="reset-globals" style="margin-top:12px">
+            Reset to standard
+          </button>
+        </div>
+      </details>
+    </section>
+
+    <section class="sec">
+      <div class="sec-head">
+        <h2>Add a cabinet</h2>
+      </div>
+      <div class="panel panel-pad">
+        <div class="grid grid-2">
+          <div class="field">
+            <label for="a-family">Type</label>
+            <select id="a-family"></select>
+          </div>
+          <div class="field">
+            <label for="a-config">Shape</label>
+            <select id="a-config"></select>
+          </div>
+        </div>
+        <div class="grid grid-2" style="margin-top:10px">
+          <div class="field">
+            <label for="a-width">Width</label>
+            <input type="number" id="a-width" min="50" max="3000" step="1">
+          </div>
+          <div class="field">
+            <label for="a-qty">Quantity</label>
+            <input type="number" id="a-qty" min="1" max="99" step="1" value="1">
+          </div>
+        </div>
+        <div class="widths" id="a-widths"></div>
+        <button type="button" class="primary" id="a-add" style="width:100%;margin-top:12px">
+          Add cabinet
+        </button>
+      </div>
+    </section>
+
+    <section class="sec">
+      <div class="sec-head">
+        <h2>Kitchen</h2>
+        <span class="count" id="cab-count">nothing added yet</span>
+        <span class="spacer"></span>
+        <button type="button" class="ghost danger" id="clear-all">Clear all</button>
+      </div>
+      <div class="cab-list" id="cab-list"></div>
+    </section>
+
   </div>
 
-  <h2>Progress</h2>
-  <ol>
-    <li class="done">Engine and tests</li>
-    <li>Working interface &mdash; job settings, add cabinets, live parts table</li>
-    <li>Standard-width presets and per-cabinet overrides</li>
-    <li>CSV export, print view, edging totals</li>
-    <li>Save and load jobs</li>
-  </ol>
+  <!-- ---------------------------------------------------------------- -->
+  <!-- Output                                                            -->
+  <!-- ---------------------------------------------------------------- -->
+  <div class="pane-output">
 
-  <footer>
-    Replaces <span style="color:var(--ink-soft)">new cut list master 2.xlsx</span>
-  </footer>
+    <div id="alerts"></div>
+
+    <section class="sec">
+      <div class="sec-head">
+        <h2>Cutting list</h2>
+        <span class="count" id="parts-count"></span>
+        <span class="spacer"></span>
+        <div class="seg" id="view-toggle">
+          <button type="button" data-view="consolidated" class="on">Consolidated</button>
+          <button type="button" data-view="by-cabinet">By cabinet</button>
+        </div>
+      </div>
+      <div id="parts"></div>
+    </section>
+
+  </div>
 </div>
+
+<script type="module" src="js/app.js"></script>
 </body>
 </html>

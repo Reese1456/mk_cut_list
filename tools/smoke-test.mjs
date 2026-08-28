@@ -1,0 +1,233 @@
+/**
+ * Headless smoke test for the interface.
+ *
+ * A minimal DOM shim - just enough of the API that app.js uses - so the module
+ * can be imported and driven in Node. Catches load-time errors that would
+ * otherwise show up as a blank page in the browser, which is the single most
+ * damaging way this app can break.
+ *
+ * The shim is deliberately shallow: it models elements, listeners, classes and
+ * localStorage, and nothing else. It is not a browser. If it ever starts
+ * failing for reasons that have nothing to do with the app, delete it - the
+ * engine tests in public/tests are the ones that matter.
+ *
+ *     node tools/smoke-test.mjs
+ */
+
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { dirname, join } from 'node:path';
+
+const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
+
+/* ---------------- tiny DOM ---------------- */
+
+class ClassList {
+  constructor(node) { this.node = node; this.set = new Set(); }
+  add(...c) { c.forEach((x) => this.set.add(x)); this.sync(); }
+  remove(...c) { c.forEach((x) => this.set.delete(x)); this.sync(); }
+  contains(c) { return this.set.has(c); }
+  toggle(c, force) {
+    const on = force === undefined ? !this.set.has(c) : force;
+    if (on) this.set.add(c); else this.set.delete(c);
+    this.sync();
+  }
+  sync() { this.node._className = [...this.set].join(' '); }
+}
+
+class El {
+  constructor(tag) {
+    this.tagName = String(tag).toUpperCase();
+    this.children = [];
+    this.parentNode = null;
+    this.attrs = {};
+    this.dataset = {};
+    this.style = {};
+    this.listeners = {};
+    this._className = '';
+    this._text = '';
+    this.value = '';
+    this.hidden = false;
+    this.checked = false;
+    this.classList = new ClassList(this);
+  }
+
+  get className() { return this._className; }
+  set className(v) {
+    this._className = v || '';
+    this.classList.set = new Set((v || '').split(/\s+/).filter(Boolean));
+  }
+
+  get textContent() {
+    if (this.children.length) return this.children.map((c) => c.textContent ?? String(c)).join('');
+    return this._text;
+  }
+  set textContent(v) { this._text = String(v); this.children = []; }
+
+  get innerHTML() { return this._html ?? ''; }
+  set innerHTML(v) { this._html = String(v); }
+
+  append(...nodes) {
+    for (const n of nodes) {
+      if (n instanceof El) { n.parentNode = this; this.children.push(n); }
+      else this.children.push({ textContent: String(n) });
+    }
+  }
+  appendChild(n) { this.append(n); return n; }
+  replaceChildren(...nodes) { this.children = []; this.append(...nodes); }
+  setAttribute(k, v) { this.attrs[k] = String(v); }
+  getAttribute(k) { return this.attrs[k]; }
+  addEventListener(type, fn) { (this.listeners[type] ||= []).push(fn); }
+  removeEventListener() {}
+  focus() {}
+  select() {}
+  closest(sel) {
+    const want = sel.replace(/^\[|\]$/g, '');
+    let n = this;
+    while (n) {
+      if (want.startsWith('button') && n.tagName === 'BUTTON') return n;
+      if (want.includes('data-view') && n.dataset?.view) return n;
+      n = n.parentNode;
+    }
+    return null;
+  }
+
+  /** Fire a listener, as the browser would. */
+  fire(type, event = {}) {
+    for (const fn of this.listeners[type] || []) fn({ target: this, preventDefault() {}, ...event });
+  }
+
+  descendants() {
+    const out = [];
+    const walk = (n) => {
+      for (const c of n.children) {
+        if (c instanceof El) { out.push(c); walk(c); }
+      }
+    };
+    walk(this);
+    return out;
+  }
+
+  querySelectorAll(sel) {
+    const all = this.descendants();
+    if (sel === 'button') return all.filter((n) => n.tagName === 'BUTTON');
+    if (sel.includes('button')) return all.filter((n) => n.tagName === 'BUTTON');
+    return all;
+  }
+  querySelector(sel) { return this.querySelectorAll(sel)[0] ?? null; }
+}
+
+const byId = new Map();
+
+const document = {
+  createElement: (tag) => new El(tag),
+  querySelector(sel) {
+    if (sel.startsWith('#')) {
+      const id = sel.slice(1).split(' ')[0];
+      return byId.get(id) ?? null;
+    }
+    return null;
+  },
+  querySelectorAll(sel) {
+    if (sel.startsWith('#')) {
+      const [idPart] = sel.split(' ');
+      const root = byId.get(idPart.slice(1));
+      return root ? root.querySelectorAll('button') : [];
+    }
+    return [];
+  },
+};
+
+/* Build the elements index.html declares, from the file itself. */
+const html = readFileSync(join(ROOT, 'public', 'index.html'), 'utf8');
+for (const m of html.matchAll(/<(\w+)[^>]*\bid="([A-Za-z0-9_-]+)"/g)) {
+  const node = new El(m[1]);
+  node.id = m[2];
+  byId.set(m[2], node);
+}
+
+const store = new Map();
+globalThis.document = document;
+globalThis.localStorage = {
+  getItem: (k) => store.get(k) ?? null,
+  setItem: (k, v) => store.set(k, v),
+  removeItem: (k) => store.delete(k),
+};
+globalThis.confirm = () => true;
+globalThis.HTMLElement = El;
+
+/* ---------------- drive it ---------------- */
+
+let failures = 0;
+const check = (name, ok, extra = '') => {
+  console.log(`  ${ok ? 'pass' : 'FAIL'}  ${name}${ok ? '' : `  <- ${extra}`}`);
+  if (!ok) failures++;
+};
+
+console.log('\nInterface smoke test\n--------------------');
+
+try {
+  await import('../public/js/app.js');
+  check('app.js loads without throwing', true);
+} catch (err) {
+  check('app.js loads without throwing', false, err.stack?.split('\n').slice(0, 3).join(' | '));
+  process.exit(1);
+}
+
+const famSelect = byId.get('a-family');
+const cfgSelect = byId.get('a-config');
+const widthInput = byId.get('a-width');
+const addButton = byId.get('a-add');
+const cabList = byId.get('cab-list');
+const parts = byId.get('parts');
+
+check('type dropdown was populated', famSelect.children.length === 5,
+  `${famSelect.children.length} options`);
+check('shape dropdown was populated', cfgSelect.children.length > 0,
+  `${cfgSelect.children.length} options`);
+check('width defaulted', Number(widthInput.value) > 0, `value="${widthInput.value}"`);
+check('standard-width chips rendered', byId.get('a-widths').children.length > 0);
+check('job dimension fields rendered', byId.get('globals').children.length === 10,
+  `${byId.get('globals').children.length} fields`);
+check('cabinet list starts empty', cabList.children.length === 1
+  && cabList.children[0].className === 'empty');
+
+/* add a cabinet */
+famSelect.value = 'floor';
+famSelect.fire('change');
+cfgSelect.value = 'doors';
+cfgSelect.fire('change');
+widthInput.value = '600';
+addButton.fire('click');
+
+check('adding a cabinet created a card', cabList.children.length === 1
+  && cabList.children[0].className.includes('cab'), cabList.children[0]?.className);
+check('cutting list rendered rows', parts.descendants().some((n) => n.tagName === 'TD'));
+check('panel total updated', Number(byId.get('t-panels').textContent) > 0,
+  byId.get('t-panels').textContent);
+check('board area updated', byId.get('t-area').textContent !== '0.00 m²',
+  byId.get('t-area').textContent);
+await new Promise((r) => setTimeout(r, 400)); // the draft save is debounced
+check('draft was saved', store.size > 0);
+
+/* a second cabinet of the same kind should consolidate */
+const linesAfterOne = Number(byId.get('t-lines').textContent);
+addButton.fire('click');
+const linesAfterTwo = Number(byId.get('t-lines').textContent);
+check('identical cabinets consolidate to the same lines',
+  linesAfterOne === linesAfterTwo, `${linesAfterOne} then ${linesAfterTwo}`);
+check('two cabinets are listed', cabList.children.length === 2,
+  `${cabList.children.length} cards`);
+
+/* a cabinet that cannot be built should be flagged, not crash */
+famSelect.value = 'tall';
+famSelect.fire('change');
+cfgSelect.value = 'elo';
+cfgSelect.fire('change');
+widthInput.value = '300';
+addButton.fire('click');
+const alerts = byId.get('alerts');
+check('an undersized oven housing raises an alert', alerts.children.length > 0);
+
+console.log(failures ? `\n${failures} failed.\n` : '\nAll interface checks passed.\n');
+process.exit(failures ? 1 : 0);

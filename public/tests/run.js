@@ -10,6 +10,7 @@
 import { FIXTURES } from './fixtures.js';
 import { runGoldenMaster } from './golden.js';
 import { runInvariants } from './invariants.js';
+import { runCatalogTests } from './catalog.js';
 import { runSweep } from './sweep.js';
 import { allChanges } from './diff-allowlist.js';
 
@@ -68,7 +69,24 @@ for (const r of invariants) {
 }
 
 /* ---------------------------------------------------------------- *
- * 3. Width sweep
+ * 3. Catalogue integration
+ * ---------------------------------------------------------------- */
+
+heading('Catalogue - every option the interface offers');
+
+const catalog = runCatalogTests();
+for (const r of catalog) {
+  if (r.status === 'pass') {
+    console.log(`  ${GREEN}pass${OFF}  ${r.name}`);
+  } else {
+    failed++;
+    console.log(`  ${RED}FAIL${OFF}  ${r.name}`);
+    console.log(`        ${r.detail}`);
+  }
+}
+
+/* ---------------------------------------------------------------- *
+ * 4. Width sweep
  * ---------------------------------------------------------------- */
 
 heading('Width sweep - every family, 100 mm to 1200 mm, one millimetre at a time');
@@ -87,7 +105,7 @@ if (sweep.failureCount === 0) {
 }
 
 /* ---------------------------------------------------------------- *
- * 4. Accepted changes report
+ * 5. Accepted changes report
  * ---------------------------------------------------------------- */
 
 if (process.argv.includes('--diffs')) {
