@@ -80,9 +80,16 @@ The left side is the kitchen, the right side is what to cut.
 3. Each cabinet gets a card. **Options** opens its settings - shelves, doors,
    drawer count, runner depth, return leg, oven aperture. Anything left blank
    uses the standard for that family.
-4. The cutting list updates as you go. **Consolidated** merges identical panels
-   across the whole kitchen, which is what the supplier wants; **By cabinet**
-   groups them per unit, which is what the workshop wants.
+4. The cutting list updates as you go, in one of two views:
+
+   - **By cabinet** - a section per cupboard with its size and settings in the
+     heading, and the panels for *one unit* beneath it. This is the sheet the
+     workshop builds from when the board comes back. It is the default.
+   - **Consolidated** - identical panels merged across the whole kitchen with a
+     total quantity. This is what goes to the supplier.
+
+   The cabinet card also states what it will cut - "Doors · 1 door · 3 shelves" -
+   so a change to an option confirms itself without hunting for it in the list.
 
 Anything that cannot be built is flagged rather than silently cut - a corner
 unit too narrow for its return, an oven housing too short for the appliance, a

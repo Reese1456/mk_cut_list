@@ -229,5 +229,46 @@ addButton.fire('click');
 const alerts = byId.get('alerts');
 check('an undersized oven housing raises an alert', alerts.children.length > 0);
 
+/* the build view groups panels under one heading per cabinet */
+const groupRows = parts.descendants()
+  .filter((n) => n.className && n.className.includes('group-row'));
+check('build view groups panels by cabinet', groupRows.length >= 2,
+  `${groupRows.length} headings`);
+check('each heading names the cabinet and its size', groupRows.every((g) => {
+  const head = g.descendants().find((n) => n.className === 'group-head');
+  return head && head.children.some((c) => c.className === 'group-name')
+    && head.children.some((c) => c.className === 'group-size');
+}));
+
+/* changing an option must visibly confirm itself on the card */
+const firstCard = cabList.children[0];
+const subtitle = firstCard.descendants().find((n) => n.className === 'sub');
+firstCard.descendants()
+  .find((n) => n.tagName === 'BUTTON' && n.textContent === 'Options')
+  .fire('click');
+
+const shelvesInput = firstCard.children[1].descendants()
+  .filter((n) => n.tagName === 'INPUT')
+  .find((i) => {
+    const l = i.parentNode && i.parentNode.children.find((c) => c.tagName === 'LABEL');
+    return l && l.textContent === 'Shelves';
+  });
+
+if (!shelvesInput) {
+  check('the options panel offers a shelf count', false, 'no Shelves input found');
+} else {
+  const wasSub = subtitle.textContent;
+  const wasPanels = byId.get('t-panels').textContent;
+  shelvesInput.value = '3';
+  shelvesInput.fire('input');
+
+  check('changing shelves changes the cutting list',
+    byId.get('t-panels').textContent !== wasPanels,
+    `panels stayed at ${wasPanels}`);
+  check('changing shelves is confirmed on the cabinet card',
+    subtitle.textContent !== wasSub && /3 shelves/.test(subtitle.textContent),
+    `subtitle reads "${subtitle.textContent}"`);
+}
+
 console.log(failures ? `\n${failures} failed.\n` : '\nAll interface checks passed.\n');
 process.exit(failures ? 1 : 0);

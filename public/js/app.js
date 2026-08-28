@@ -11,7 +11,9 @@
  * every change.
  */
 
-import { expandCabinet, consolidate, totalArea, totalEdging, describeCabinet } from './rules.js';
+import {
+  expandCabinet, consolidate, totalArea, totalEdging, describeCabinet, resolve,
+} from './rules.js';
 import { DEFAULT_GLOBALS } from './constants.js';
 import {
   FAMILIES, family, config, fieldsFor, makeCabinet, widthsFor, defaultWidthFor, GLOBAL_FIELDS,
@@ -27,7 +29,7 @@ const state = {
   job: { client: '', reference: '', boardColour: '', edgeColour: '', gola: false },
   globals: { ...DEFAULT_GLOBALS },
   cabinets: [],
-  view: 'consolidated',
+  view: 'by-cabinet',
 };
 
 /** Cards the operator has expanded. Kept out of the saved draft. */
@@ -83,6 +85,9 @@ function selectInput(options, value) {
     if (String(opt.value) === String(value)) o.selected = true;
     select.append(o);
   }
+  // Set it on the select too. Relying on an option's `selected` flag alone is
+  // the kind of thing that works until an element is moved in the DOM.
+  select.value = String(value ?? options[0]?.value ?? '');
   return select;
 }
 
@@ -192,6 +197,9 @@ function renderGlobals() {
     host.append(field(g.label, input));
   }
 
+}
+
+function wireGlobalsReset() {
   $('#reset-globals').addEventListener('click', () => {
     state.globals = { ...DEFAULT_GLOBALS };
     renderGlobals();
@@ -302,12 +310,55 @@ function renderAddForm() {
 /** Cards by cabinet id, so they can be refreshed without rebuilding. */
 const cards = new Map();
 
-function cabinetTitle(cab) {
+/**
+ * Summarise what a cabinet actually is, in the words the workshop uses.
+ *
+ * Shelf and drawer counts are read back from the panels the engine produced
+ * rather than from the settings, so the card always states what will really be
+ * cut - which is the confirmation that an option took effect.
+ */
+function describeOptions(cab, parts) {
+  const o = cab.overrides || {};
+  const bits = [];
+
+  const count = (match) => parts
+    .filter((p) => match.test(p.desc))
+    .reduce((n, p) => n + p.qty, 0) / Math.max(cab.qty || 1, 1);
+
+  if (o.doors) bits.push(`${o.doors} ${o.doors === 1 ? 'door' : 'doors'}`);
+
+  if (cab.config === 'drawers') {
+    const drawers = o.drawers ?? 4;
+    bits.push(`${drawers} drawers`);
+    bits.push(`${o.runnerDepth ?? 500} runner`);
+  }
+
+  if (cab.config === 'elo') {
+    const label = { single: 'single oven', double: 'double oven', compact: 'compact' };
+    bits.push(label[o.aperture ?? 'single'] ?? `${o.aperture} mm opening`);
+  }
+
+  const fixed = count(/^fixed shelf$/);
+  if (fixed) bits.push(`${fixed} fixed`);
+
+  const shelves = count(/shelf|shelves/) - fixed;
+  if (shelves > 0) bits.push(`${shelves} ${shelves === 1 ? 'shelf' : 'shelves'}`);
+  else if (cab.config !== 'corner') bits.push('no shelf');
+
+  if (o.legWidth) bits.push(`${o.legWidth} return`);
+
+  return bits;
+}
+
+function cabinetTitle(cab, parts = []) {
   const fam = family(cab.type);
   const cfg = fam?.configs.find((c) => c.id === cab.config);
+  const name = `${fam?.short ?? cab.type} ${cab.width}`;
+  const detail = [cfg?.label ?? cab.config, ...describeOptions(cab, parts)].join(' · ');
+
   return {
-    main: cab.label || `${fam?.short ?? cab.type} ${cab.width}`,
-    sub: cab.label ? `${fam?.short ?? cab.type} ${cab.width} · ${cfg?.label ?? cab.config}` : (cfg?.label ?? cab.config),
+    main: cab.label || name,
+    sub: cab.label ? `${name} · ${detail}` : detail,
   };
 }
 
@@ -367,18 +418,20 @@ function buildCard(cab) {
   buildCardBody(cab, body);
 
   const refresh = () => {
-    const t = cabinetTitle(cab);
-    nameMain.textContent = t.main;
-    nameSub.textContent = t.sub;
     if (Number(qty.value) !== cab.qty) qty.value = cab.qty;
 
     const globals = { ...state.globals, gola: state.job.gola };
     let warnings = [];
+    let parts = [];
     try {
-      warnings = expandCabinet(cab, globals).warnings;
+      ({ parts, warnings } = expandCabinet(cab, globals));
     } catch (err) {
       warnings = [err.message];
     }
+
+    const t = cabinetTitle(cab, parts);
+    nameMain.textContent = t.main;
+    nameSub.textContent = t.sub;
     warn.replaceChildren();
     warn.hidden = warnings.length === 0;
     card.classList.toggle('has-warning', warnings.length > 0);
@@ -560,8 +613,16 @@ function partsTable(rows, { showCabinet }) {
   for (const row of rows) {
     if (row.group) {
       const tr = el('tr', 'group-row');
-      const td = el('td', null, row.group);
+      const td = document.createElement('td');
       td.colSpan = headers.length;
+
+      const head = el('div', 'group-head');
+      head.append(el('span', 'group-name', row.group));
+      if (row.units > 1) head.append(el('span', 'group-units', `× ${row.units}`));
+      if (row.detail) head.append(el('span', 'group-detail', row.detail));
+      if (row.size) head.append(el('span', 'group-size', row.size));
+      td.append(head);
+
       tr.append(td);
       tbody.append(tr);
       continue;
@@ -634,16 +695,43 @@ function renderOutput() {
       consolidated.map((part) => ({ part })),
       { showCabinet: true },
     ));
-  } else {
-    const rows = [];
-    for (const g of groups) {
-      if (!g.parts.length) continue;
-      const qty = g.cab.qty > 1 ? ` × ${g.cab.qty}` : '';
-      rows.push({ group: `${describeCabinet(g.cab)}${qty}` });
-      for (const part of g.parts) rows.push({ part });
-    }
-    host.append(partsTable(rows, { showCabinet: false }));
+    return;
   }
+
+  /* ---- by cabinet: the sheet the workshop builds from ---- */
+  const globals = { ...state.globals, gola: state.job.gola };
+  const rows = [];
+
+  for (const g of groups) {
+    if (!g.parts.length) continue;
+
+    // One unit's worth, so the list reads as "what this cupboard needs".
+    let unitParts = g.parts;
+    try {
+      unitParts = expandCabinet({ ...g.cab, qty: 1 }, globals).parts;
+    } catch {
+      // Fall back to the multiplied parts rather than showing nothing.
+    }
+
+    const d = resolve(g.cab, globals);
+    const fam = family(g.cab.type);
+    const cfg = fam?.configs.find((c) => c.id === g.cab.config);
+    const name = g.cab.label
+      ? `${g.cab.label} — ${fam?.short ?? g.cab.type} ${g.cab.width}`
+      : `${fam?.short ?? g.cab.type} ${g.cab.width}`;
+
+    rows.push({
+      group: name,
+      units: g.cab.qty,
+      detail: [cfg?.label ?? g.cab.config, ...describeOptions(g.cab, unitParts)].join(' · '),
+      size: `${g.cab.width} w × ${d.H} h × ${d.D} d`,
+    });
+    for (const part of unitParts) rows.push({ part });
+  }
+
+  const note = el('p', 'view-note',
+    'Quantities are for one unit. A cabinet added more than once shows × the number needed.');
+  host.append(note, partsTable(rows, { showCabinet: false }));
 }
 
 /* ------------------------------------------------------------------ *
@@ -681,6 +769,7 @@ function wireClearAll() {
 loadDraft();
 wireJobFields();
 renderGlobals();
+wireGlobalsReset();
 renderAddForm();
 wireViewToggle();
 wireClearAll();
