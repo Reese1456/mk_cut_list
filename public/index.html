@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MKitchens Cutlist Manager</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@600;700&family=JetBrains+Mono:wght@400;700&display=swap">
+<style>
+  :root{
+    --ground:#F6F6F3; --surface:#FFF; --ink:#191E24; --ink-soft:#5C6470;
+    --ink-faint:#8A919B; --rule:#DDDDD5; --accent:#A9662F;
+    --ok:#356043; --ok-soft:#DDEADF;
+  }
+  @media (prefers-color-scheme:dark){
+    :root:not([data-theme="light"]){
+      --ground:#14171B; --surface:#1B1F24; --ink:#E8E7E2; --ink-soft:#A2AAB5;
+      --ink-faint:#767E89; --rule:#2E343B; --accent:#D28F52;
+      --ok:#7FB68F; --ok-soft:#1B2A20;
+    }
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0; background:var(--ground); color:var(--ink);
+    font-family:"JetBrains Mono",ui-monospace,Consolas,monospace;
+    font-size:14px; line-height:1.65; padding:0 24px 80px;
+  }
+  .wrap{max-width:680px;margin:0 auto}
+  header{border-bottom:2px solid var(--ink);padding:72px 0 22px;margin-bottom:32px}
+  .eyebrow{
+    font-size:11px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;
+    color:var(--accent);margin:0 0 16px;
+  }
+  h1{
+    font-family:Archivo,system-ui,sans-serif;font-weight:700;
+    font-size:clamp(2rem,5vw,3rem);letter-spacing:-.025em;margin:0 0 14px;line-height:1.05;
+  }
+  .sub{color:var(--ink-soft);margin:0;font-size:15px}
+  .status{
+    display:inline-block;background:var(--ok-soft);color:var(--ok);
+    border:1px solid var(--ok);border-radius:3px;padding:4px 10px;
+    font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;
+    margin-bottom:24px;
+  }
+  h2{
+    font-family:Archivo,system-ui,sans-serif;font-size:1.05rem;font-weight:700;
+    margin:36px 0 10px;padding-left:12px;border-left:3px solid var(--accent);
+  }
+  p{margin:0 0 14px}
+  ol{padding-left:20px;margin:0 0 14px}
+  li{margin-bottom:6px}
+  li.done{color:var(--ink-faint);text-decoration:line-through}
+  a{color:var(--accent);font-weight:700}
+  .card{
+    background:var(--surface);border:1px solid var(--rule);border-radius:3px;
+    padding:18px 22px;margin-top:8px;
+  }
+  footer{
+    margin-top:56px;padding-top:18px;border-top:2px solid var(--ink);
+    color:var(--ink-faint);font-size:11.5px;
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <p class="eyebrow">MKitchens</p>
+    <h1>Cutlist Manager</h1>
+    <p class="sub">Cutting lists for kitchen carcasses in 16&nbsp;mm melamine board.</p>
+  </header>
+
+  <span class="status">Phase 1 &mdash; engine complete</span>
+
+  <p>The calculation engine is built and tested. The interface for entering a kitchen is next.</p>
+
+  <div class="card">
+    <p style="margin:0"><strong>Verify the maths &rarr;</strong> <a href="tests.html">Run the checks</a></p>
+    <p style="margin:6px 0 0;color:var(--ink-soft);font-size:13px">
+      Rebuilds all 56 cabinets from the original spreadsheet and compares every panel.
+      Runs in your browser, nothing to install.
+    </p>
+  </div>
+
+  <h2>Progress</h2>
+  <ol>
+    <li class="done">Engine and tests</li>
+    <li>Working interface &mdash; job settings, add cabinets, live parts table</li>
+    <li>Standard-width presets and per-cabinet overrides</li>
+    <li>CSV export, print view, edging totals</li>
+    <li>Save and load jobs</li>
+  </ol>
+
+  <footer>
+    Replaces <span style="color:var(--ink-soft)">new cut list master 2.xlsx</span>
+  </footer>
+</div>
+</body>
+</html>

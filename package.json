@@ -1,0 +1,11 @@
+{
+  "name": "mkitchens-cutlist",
+  "version": "0.1.0",
+  "description": "MKitchens Cutlist Manager - cutting list generator for 16mm melamine kitchen carcasses",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "test": "node public/tests/run.js",
+    "fixtures": "python tools/extract_fixtures.py"
+  }
+}

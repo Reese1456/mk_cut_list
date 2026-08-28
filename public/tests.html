@@ -1,0 +1,207 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MKitchens Cutlist - Checks</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@600;700&family=JetBrains+Mono:wght@400;500;700&display=swap">
+<style>
+  :root{
+    --ground:#F6F6F3; --surface:#FFF; --surface-2:#EFEFEA;
+    --ink:#191E24; --ink-soft:#5C6470; --ink-faint:#8A919B;
+    --rule:#DDDDD5; --accent:#A9662F;
+    --ok:#356043; --ok-soft:#DDEADF;
+    --warn:#8A6410; --warn-soft:#F5E9CE;
+    --danger:#9E2F26; --danger-soft:#F5DEDB;
+  }
+  @media (prefers-color-scheme:dark){
+    :root:not([data-theme="light"]){
+      --ground:#14171B; --surface:#1B1F24; --surface-2:#22272D;
+      --ink:#E8E7E2; --ink-soft:#A2AAB5; --ink-faint:#767E89;
+      --rule:#2E343B; --accent:#D28F52;
+      --ok:#7FB68F; --ok-soft:#1B2A20;
+      --warn:#D7AC55; --warn-soft:#332813;
+      --danger:#E08379; --danger-soft:#361F1C;
+    }
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0; background:var(--ground); color:var(--ink);
+    font-family:"JetBrains Mono",ui-monospace,Consolas,monospace;
+    font-size:13px; line-height:1.6; padding:0 24px 80px;
+  }
+  .wrap{max-width:900px;margin:0 auto}
+  header{border-bottom:2px solid var(--ink);padding:44px 0 20px;margin-bottom:8px}
+  h1{
+    font-family:Archivo,system-ui,sans-serif;font-weight:700;
+    font-size:clamp(1.8rem,4vw,2.6rem);letter-spacing:-.02em;margin:0 0 8px;
+  }
+  .sub{color:var(--ink-soft);margin:0;font-size:13px}
+  .verdict{
+    margin:22px 0 0;padding:16px 20px;border-radius:3px;border:1px solid var(--rule);
+    font-weight:700;font-size:15px;background:var(--surface);
+  }
+  .verdict.pass{background:var(--ok-soft);color:var(--ok);border-color:var(--ok)}
+  .verdict.fail{background:var(--danger-soft);color:var(--danger);border-color:var(--danger)}
+  section{padding-top:36px}
+  h2{
+    font-family:Archivo,system-ui,sans-serif;font-size:1.15rem;font-weight:700;
+    margin:0 0 4px;padding-left:14px;border-left:4px solid var(--accent);
+  }
+  .note{color:var(--ink-soft);margin:0 0 16px;padding-left:18px;font-size:12.5px}
+  .row{
+    display:flex;gap:12px;align-items:baseline;padding:6px 0;
+    border-bottom:1px solid var(--rule);
+  }
+  .row:last-child{border-bottom:0}
+  .tag{
+    flex:0 0 auto;font-size:9.5px;font-weight:700;letter-spacing:.1em;
+    text-transform:uppercase;padding:3px 7px;border-radius:2px;
+  }
+  .t-pass{background:var(--ok-soft);color:var(--ok)}
+  .t-norm{background:var(--warn-soft);color:var(--warn)}
+  .t-fail{background:var(--danger-soft);color:var(--danger)}
+  .detail{color:var(--danger);padding-left:12px;white-space:pre-wrap}
+  .stats{
+    display:flex;flex-wrap:wrap;gap:0;border:1px solid var(--rule);
+    border-radius:3px;background:var(--surface);margin-bottom:18px;
+  }
+  .stats div{flex:1 1 130px;padding:14px 18px;border-right:1px solid var(--rule)}
+  .stats div:last-child{border-right:0}
+  .stats dt{font-size:9.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-faint);margin:0 0 4px}
+  .stats dd{margin:0;font-size:20px;font-weight:700;font-variant-numeric:tabular-nums}
+  details{
+    background:var(--surface);border:1px solid var(--rule);border-radius:3px;
+    padding:12px 16px;margin-top:14px;
+  }
+  summary{cursor:pointer;font-weight:700;font-family:Archivo,system-ui,sans-serif}
+  .change{padding:12px 0;border-bottom:1px solid var(--rule)}
+  .change:last-child{border-bottom:0}
+  .change .k{color:var(--ink-faint);display:inline-block;width:46px}
+  .was{color:var(--danger)} .now{color:var(--ok)}
+  .why{color:var(--ink-soft);margin-top:4px}
+  footer{margin-top:60px;padding-top:18px;border-top:2px solid var(--ink);color:var(--ink-faint);font-size:11.5px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Cutting checks</h1>
+    <p class="sub">Every calculation in the MKitchens cutlist engine, verified against the original workbook.</p>
+    <div id="verdict" class="verdict">Running&hellip;</div>
+  </header>
+  <div id="out"></div>
+  <footer>
+    Re-run any time by reloading this page. Nothing here touches saved jobs.
+  </footer>
+</div>
+
+<script type="module">
+import { FIXTURES } from './tests/fixtures.js';
+import { runGoldenMaster } from './tests/golden.js';
+import { runInvariants } from './tests/invariants.js';
+import { runSweep } from './tests/sweep.js';
+import { allChanges } from './tests/diff-allowlist.js';
+
+const out = document.getElementById('out');
+const el = (tag, cls, html) => {
+  const n = document.createElement(tag);
+  if (cls) n.className = cls;
+  if (html !== undefined) n.innerHTML = html;
+  return n;
+};
+const esc = (s) => String(s).replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
+
+let failures = 0;
+
+/* ---- 1. golden master ---- */
+const golden = runGoldenMaster(FIXTURES);
+const exact = golden.filter((r) => r.status === 'exact').length;
+const normalised = golden.filter((r) => r.status === 'normalised').length;
+const broken = golden.filter((r) => r.status !== 'exact' && r.status !== 'normalised');
+failures += broken.length;
+
+const s1 = el('section');
+s1.append(el('h2', null, 'Golden master'));
+s1.append(el('p', 'note', 'Every one of the 56 cabinet blocks in the spreadsheet, rebuilt through the engine and compared panel by panel.'));
+s1.append(el('div', 'stats', `
+  <div><dt>Exact match</dt><dd>${exact}</dd></div>
+  <div><dt>Normalised</dt><dd>${normalised}</dd></div>
+  <div><dt>Failed</dt><dd>${broken.length}</dd></div>
+  <div><dt>Panels checked</dt><dd>${FIXTURES.blocks.reduce((n, b) => n + b.parts.length, 0)}</dd></div>
+`));
+for (const r of broken) {
+  const row = el('div', 'row');
+  row.append(el('span', 'tag t-fail', 'fail'));
+  row.append(el('span', null, `block ${r.block} &mdash; ${esc(r.detail || '')}`));
+  s1.append(row);
+  for (const m of r.missing || []) s1.append(el('div', 'detail', `sheet only : ${esc(m)}`));
+  for (const e of r.extra || []) s1.append(el('div', 'detail', `engine only: ${esc(e)}`));
+}
+out.append(s1);
+
+/* ---- 2. invariants ---- */
+const inv = runInvariants();
+failures += inv.filter((r) => r.status !== 'pass').length;
+
+const s2 = el('section');
+s2.append(el('h2', null, 'Invariants'));
+s2.append(el('p', 'note', 'Properties that must hold for any cabinet at any width.'));
+for (const r of inv) {
+  const row = el('div', 'row');
+  row.append(el('span', `tag ${r.status === 'pass' ? 't-pass' : 't-fail'}`, r.status));
+  row.append(el('span', null, esc(r.name)));
+  s2.append(row);
+  if (r.detail) s2.append(el('div', 'detail', esc(r.detail)));
+}
+out.append(s2);
+
+/* ---- 3. sweep ---- */
+const sweep = runSweep();
+failures += sweep.failureCount;
+
+const s3 = el('section');
+s3.append(el('h2', null, 'Width sweep'));
+s3.append(el('p', 'note', 'Every family and configuration built at every width from 100 mm to 1200 mm, one millimetre at a time.'));
+s3.append(el('div', 'stats', `
+  <div><dt>Cabinets built</dt><dd>${sweep.cabinets.toLocaleString()}</dd></div>
+  <div><dt>Panels produced</dt><dd>${sweep.panels.toLocaleString()}</dd></div>
+  <div><dt>Correctly flagged</dt><dd>${sweep.warned.toLocaleString()}</dd></div>
+  <div><dt>Failures</dt><dd>${sweep.failureCount}</dd></div>
+`));
+for (const f of sweep.failures) s3.append(el('div', 'detail', esc(f)));
+out.append(s3);
+
+/* ---- 4. accepted changes ---- */
+const changes = allChanges();
+const s4 = el('section');
+s4.append(el('h2', null, 'Accepted changes'));
+s4.append(el('p', 'note', 'Values that now differ from the spreadsheet, and why. Worth checking against a kitchen already built.'));
+const det = el('details');
+det.append(el('summary', null, `${changes.length} changes`));
+for (const c of changes) {
+  const d = el('div', 'change', `
+    <div><span class="k">block</span> ${c.block} &nbsp;<span style="color:var(--ink-faint)">fault ${c.fault}</span></div>
+    <div><span class="k">was</span> <span class="was">${esc(c.sheet)}</span></div>
+    <div><span class="k">now</span> <span class="now">${esc(c.engine)}</span></div>
+    <div class="why">${esc(c.reason)}</div>
+  `);
+  det.append(d);
+}
+s4.append(det);
+out.append(s4);
+
+/* ---- verdict ---- */
+const v = document.getElementById('verdict');
+if (failures === 0) {
+  v.className = 'verdict pass';
+  v.textContent = 'All checks passed.';
+} else {
+  v.className = 'verdict fail';
+  v.textContent = `${failures} check${failures === 1 ? '' : 's'} failed.`;
+}
+</script>
+</body>
+</html>
