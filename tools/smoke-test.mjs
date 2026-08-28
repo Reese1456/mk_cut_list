@@ -270,5 +270,38 @@ if (!shelvesInput) {
     `subtitle reads "${subtitle.textContent}"`);
 }
 
+/* height and depth can be overridden on any cabinet, and clearing them returns
+   the cabinet to its family standard */
+{
+  const inputs = firstCard.children[1].descendants().filter((n) => n.tagName === 'INPUT');
+  const labelOf = (i) => {
+    const l = i.parentNode && i.parentNode.children.find((c) => c.tagName === 'LABEL');
+    return l ? l.textContent : '';
+  };
+  const height = inputs.find((i) => labelOf(i) === 'Height');
+  const depth = inputs.find((i) => labelOf(i) === 'Depth');
+
+  check('the options panel offers height and depth', !!height && !!depth);
+
+  if (height && depth) {
+    check('height and depth show the family standard as a placeholder',
+      Number(height.placeholder) > 0 && Number(depth.placeholder) > 0,
+      `height "${height.placeholder}", depth "${depth.placeholder}"`);
+
+    const standardArea = byId.get('t-area').textContent;
+    height.value = '900';
+    height.fire('input');
+    const taller = byId.get('t-area').textContent;
+    check('changing height re-cuts the panels', taller !== standardArea,
+      `area stayed at ${standardArea}`);
+
+    height.value = '';
+    height.fire('input');
+    check('clearing height returns the cabinet to standard',
+      byId.get('t-area').textContent === standardArea,
+      `expected ${standardArea}, got ${byId.get('t-area').textContent}`);
+  }
+}
+
 console.log(failures ? `\n${failures} failed.\n` : '\nAll interface checks passed.\n');
 process.exit(failures ? 1 : 0);

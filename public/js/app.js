@@ -16,7 +16,8 @@ import {
 } from './rules.js';
 import { DEFAULT_GLOBALS } from './constants.js';
 import {
-  FAMILIES, family, config, fieldsFor, makeCabinet, widthsFor, defaultWidthFor, GLOBAL_FIELDS,
+  FAMILIES, family, config, fieldsFor, makeCabinet, widthsFor, defaultWidthFor,
+  SIZE_FIELDS, GLOBAL_FIELDS,
 } from './catalog.js';
 
 const DRAFT_KEY = 'mkitchens.cutlist.draft';
@@ -346,6 +347,8 @@ function describeOptions(cab, parts) {
   else if (cab.config !== 'corner') bits.push('no shelf');
 
   if (o.legWidth) bits.push(`${o.legWidth} return`);
+  if (o.height) bits.push(`${o.height} high`);
+  if (o.depth) bits.push(`${o.depth} deep`);
 
   return bits;
 }
@@ -512,13 +515,47 @@ function buildCardBody(cab, body) {
   });
   syncChips();
 
+  /* Height and depth. Blank means "use the standard for this family", and the
+     placeholder shows what that standard is, so the box is never a mystery. */
+  const globals = { ...state.globals, gola: state.job.gola };
+  const standard = resolve({ ...cab, overrides: {} }, globals);
+
+  const sizeInputs = SIZE_FIELDS.map((f) => {
+    const input = numberInput(cab.overrides[f.id], {
+      min: 1,
+      max: 4000,
+      placeholder: String(f.id === 'height' ? standard.H : standard.D),
+    });
+    input.addEventListener('input', () => {
+      const raw = input.value.trim();
+      if (raw === '') {
+        delete cab.overrides[f.id];
+      } else {
+        const v = Number(raw);
+        if (!Number.isFinite(v) || v <= 0) return;
+        cab.overrides[f.id] = v;
+      }
+      saveDraft();
+      cards.get(cab.id)?.refresh();
+      renderOutput();
+    });
+    return field(f.label, input);
+  });
+
   const row1 = el('div', 'grid grid-2');
   row1.append(field('Shape', shape), field('Width', width));
+
+  const sizeRow = el('div', 'grid grid-2');
+  sizeRow.append(...sizeInputs);
 
   const row2 = el('div', 'grid');
   row2.append(field('Label', label, 'Optional. Shows on the cutting list.'));
 
-  body.append(row1, chips, row2);
+  const sizeHint = el('div', 'hint',
+    'Height and depth are blank unless you change them - the standard for this '
+    + 'family is shown in grey. Every panel re-cuts as you type.');
+
+  body.append(row1, chips, sizeRow, sizeHint, row2);
 
   /* configuration-specific options */
   const fields = fieldsFor(cab.type, cab.config);

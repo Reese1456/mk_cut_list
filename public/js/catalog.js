@@ -102,7 +102,7 @@ export const FAMILIES = [
     configs: [
       { id: 'doors', label: 'Doors', fields: ['doors', 'shelves'] },
       { id: 'corner', label: 'Corner', fields: ['legWidth'], minWidth: 450 },
-      { id: 'flap', label: 'Appliance box', fields: ['shelves'] },
+      { id: 'flap', label: 'Appliance box', fields: ['shelves'], defaults: { height: 360, depth: 300 } },
     ],
   },
   {
@@ -115,7 +115,7 @@ export const FAMILIES = [
     configs: [
       { id: 'doors', label: 'Doors', fields: ['doors', 'shelves'] },
       { id: 'corner', label: 'Corner', fields: ['legWidth'], minWidth: 450 },
-      { id: 'flap', label: 'Appliance box', fields: ['shelves'] },
+      { id: 'flap', label: 'Appliance box', fields: ['shelves'], defaults: { height: 360, depth: 300 } },
     ],
   },
   {
@@ -197,6 +197,9 @@ export function makeCabinet(familyId, configId, width) {
   for (const f of fieldsFor(familyId, configId)) {
     if (f.default !== null && f.default !== undefined) overrides[f.id] = f.default;
   }
+  // Some shapes are a different size from the rest of their family - an
+  // appliance box is a short, shallow wall unit.
+  Object.assign(overrides, config(familyId, configId)?.defaults ?? {});
   return {
     id: newId(),
     type: familyId,
@@ -213,6 +216,15 @@ function newId() {
   if (globalThis.crypto?.randomUUID) return globalThis.crypto.randomUUID();
   return `c${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
 }
+
+/**
+ * Height and depth can be overridden on any cabinet, so they are offered
+ * everywhere rather than being listed by each shape. Width is always shown.
+ */
+export const SIZE_FIELDS = [
+  { id: 'height', label: 'Height' },
+  { id: 'depth', label: 'Depth' },
+];
 
 /** The job-level dimensions the operator can change, grouped for display. */
 export const GLOBAL_FIELDS = [
