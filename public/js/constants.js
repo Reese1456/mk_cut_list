@@ -1,9 +1,9 @@
 /**
  * MKitchens Cutlist Manager - dimensional constants.
  *
- * Everything the engine cuts is derived from the values in this file plus a
- * cabinet width. If a number appears anywhere else in the codebase, it is a
- * bug - put it here and give it a name.
+ * Shared dimensions and repeatable construction rules live here. A few
+ * one-off sizes reproduced from the source workbook remain documented beside
+ * their builders in rules.js.
  *
  * All dimensions are millimetres.
  */
@@ -17,7 +17,7 @@ export const DEFAULT_GLOBALS = {
 
   /** Plinth under the floor units. Carcass height plus this is the finished
    *  height the worktop sits on. */
-  kickHeight: 100,
+  kickHeight: 150,
 
   wallTallHeight: 1080,
   wallStdHeight: 720,
@@ -48,8 +48,8 @@ export const K = {
   /** Depth of the fixing rail under a worktop. */
   cleatDepth: 125,
 
-  /** Floor unit back sits above the base rather than between top and bottom. */
-  floorBackReduction: 17,
+  /** Clearance above a floor-unit base, in addition to one board thickness. */
+  floorBackClearance: 1,
 
   /** Side-to-side clearance for drawer runners, on top of the two carcass sides. */
   drawerRunnerAllowance: 58,
@@ -70,9 +70,6 @@ export const K = {
   /** Fixed width of the narrow return back panel on a corner unit. */
   cornerBackNarrow: 300,
 
-  /** Built-in cupboards share dividers between bays, so only one thickness is lost. */
-  bicShelfReduction: 16,
-
   /** How far the plinth is set back from the front of a floor unit. */
   kickRecess: 50,
 
@@ -92,17 +89,27 @@ export const OVEN_APERTURES = {
   compact: 450, // microwave, combi oven, coffee machine, warming drawer
 };
 
-/**
- * The two floor-unit builds MKitchens uses. Carcass height and plinth height
- * are set separately - these are the pairs worth putting one click away.
- */
-export const FLOOR_BUILDS = [
-  { carcass: 720, kick: 150, label: '720 carcass + 150 kick' },
-  { carcass: 780, kick: 100, label: '780 carcass + 100 kick' },
-];
+/** Nominal cabinet width required by a roughly 595 mm built-in oven. */
+export const OVEN_CABINET_MIN_WIDTH = 600;
 
-/** Plinth heights offered as quick picks. */
-export const KICK_HEIGHTS = [100, 150];
+/**
+ * Kickplates are bought as stock lengths rather than cut as carcass panels.
+ * Keep the stock sizes here so the calculator, tests and interface all share
+ * the same source without coupling either one to a floor-carcass height.
+ */
+export const KICKPLATE_MATERIALS = {
+  wood: { label: 'Wood', stockLength: 2700 },
+  aluminium: { label: 'Aluminium', stockLength: 3000 },
+};
+
+/** Job-level calculator defaults. A blank end depth follows the floor depth. */
+export const DEFAULT_KICKPLATE_SETTINGS = {
+  material: 'aluminium',
+  endCount: 0,
+  endDepth: null,
+  cornerAllowance: null,
+  cornerSignature: null,
+};
 
 /** Standard melamine sheet. Used only to warn when a part cannot be cut. */
 export const SHEET = {

@@ -206,6 +206,72 @@ body {
 .panel-pad { padding: 14px 16px; }
 
 /* ------------------------------------------------------------------ *
+ * Kickplate stock calculator
+ * ------------------------------------------------------------------ */
+
+.kick-fields { margin-top: 12px; }
+
+.kick-breakdown {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0;
+  margin: 14px 0 0;
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  overflow: hidden;
+}
+.kick-breakdown div {
+  padding: 8px 10px;
+  background: var(--surface-2);
+  border-bottom: 1px solid var(--rule);
+}
+.kick-breakdown div:nth-child(odd) { border-right: 1px solid var(--rule); }
+.kick-breakdown div:nth-last-child(-n + 2) { border-bottom: 0; }
+.kick-breakdown dt {
+  font-size: calc(var(--fs) - 3.5px);
+  color: var(--ink-faint);
+  text-transform: uppercase;
+  letter-spacing: .08em;
+}
+.kick-breakdown dd {
+  margin: 1px 0 0;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.kick-breakdown .kick-total { background: var(--accent-soft); }
+
+.kick-result {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: 10px;
+  padding: 11px 12px;
+  border-left: 3px solid var(--accent);
+  background: var(--surface-2);
+}
+.kick-result > span {
+  font-size: calc(var(--fs) - 3.5px);
+  color: var(--ink-faint);
+  text-transform: uppercase;
+  letter-spacing: .08em;
+}
+.kick-result strong { font-family: var(--f-display); }
+.kick-result small { color: var(--ink-soft); }
+
+.kick-warnings {
+  margin-top: 10px;
+  padding: 9px 11px;
+  border: 1px solid var(--warn);
+  border-radius: 3px;
+  color: var(--warn);
+  background: var(--warn-soft);
+  font-size: calc(var(--fs) - 2px);
+}
+.kick-warnings p { margin: 0 0 4px; }
+.kick-warnings p:last-child { margin-bottom: 0; }
+.kick-note { margin: 10px 0 0; }
+
+/* ------------------------------------------------------------------ *
  * Form controls
  * ------------------------------------------------------------------ */
 

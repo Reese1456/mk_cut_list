@@ -7,8 +7,8 @@ every kitchen design. You pick cabinets, it produces the panel list and a clean
 CSV for the board supplier.
 
 **Status: Phase 4 complete.** A whole kitchen can be entered, adjusted and
-exported as a CSV for the board supplier. Named jobs and import/export of a
-saved job are the remaining work.
+exported as a CSV for the board supplier. Named jobs plus portable import/export
+of saved jobs and preset libraries are the remaining work.
 
 ---
 
@@ -77,8 +77,9 @@ Along the top are three things worth knowing about before anything else:
 the computer), and **Download cutting list**, which is the button that produces
 the file for the supplier. All three remember what you chose.
 
-1. Fill in the client and reference. Tick **Gola** if the kitchen uses a gola
-   profile - floor doors then lose 35 mm.
+1. Fill in the client and reference. **Gola** is recorded for the future front
+   list, but fronts are not included in this version, so it does not change the
+   current carcass CSV.
 2. Under **Add a cabinet**, pick a type and shape, click a standard width or
    type any width at all, set a quantity, and press Add. Enter adds it too, so
    a whole run can be typed without touching the mouse.
@@ -102,6 +103,11 @@ the file for the supplier. All three remember what you chose.
    type.
 6. Press **Download cutting list** for the supplier's CSV.
 
+The **Kickplate calculator** underneath the kitchen list is separate from the
+carcass cutting list. It automatically totals the straight floor-cupboard
+fronts, then asks for exposed end returns and any corner measurement before it
+reports the stock lengths to buy.
+
 Anything that cannot be built is flagged rather than silently cut - a corner
 unit too narrow for its return, an oven housing too short for the appliance, a
 panel bigger than a sheet.
@@ -109,8 +115,9 @@ panel bigger than a sheet.
 **Job dimensions** holds the heights and depths every cabinet is derived from.
 Changing one re-cuts the whole kitchen.
 
-The kitchen you are working on is kept in the browser so a refresh does not lose
-it. Named jobs, and moving a job between machines, come in phase 5.
+The kitchen you are working on, including its kickplate-calculator settings, is
+kept in the browser so a refresh does not lose it. Named jobs, and moving jobs
+or presets between machines, come in phase 5.
 
 ---
 
@@ -121,10 +128,11 @@ Everything derives from a handful of job dimensions plus one cabinet width.
 | Symbol | Meaning | Default |
 |---|---|---|
 | FH / FD | Floor unit height and depth | 720 / 560 |
-| Kick | Plinth height under the floor units | 100 |
+| Kick | Plinth height under the floor units | 150 |
 | WH₁ / WH₂ | Wall unit height, tall and standard | 1080 / 720 |
 | WD | Wall unit depth | 300 |
 | TH / TD | Tall unit height and depth | 2296 / 580 |
+| BH / BD | Built-in cupboard height and depth | 2500 / 560 |
 | T | Board thickness | 16 |
 
 A cabinet is a small object. The engine turns it into panels:
@@ -168,22 +176,40 @@ Every override is optional. Leave one out and the family default applies.
 `runnerDepth`, `cleats`, `back`, `legWidth`, and for eye level ovens
 `aperture` and `apertureBottom`.
 
-### Floor units and plinths
+### Floor units and kickplates
 
-Floor units are built one of two ways, and the two settings are independent so
-either can be changed on its own:
+The fresh-job starting point is a **720 mm carcass with a 150 mm kickplate**.
+The familiar alternative is 780 with 100. Carcass height and kickplate height
+remain separate job fields: changing one never silently changes the other, so
+non-standard combinations are still possible.
 
 | Carcass | Plinth | Finished height |
 |---|---|---|
 | 720 | 150 | 870 |
 | 780 | 100 | 880 |
 
-Every floor unit gets a `kickplate` panel the full width of the cabinet, banded
-along its top edge, which is the one you see above the floor. Set a cabinet's
-**Kickplate** option to `0` where the plinth runs on from its neighbour, or
-change the job-wide height under **Job dimensions**.
+Kickplates are linear stock, not one carcass-board panel per cabinet. The
+calculator adds `width × quantity` for straight floor doors, drawers, bin units
+and under-counter ovens. Wall, tall, built-in cupboard and floor-corner widths
+are not added automatically. Exposed ends add `number of end cupboards × end
+depth`; leaving end depth blank follows the job's floor depth.
 
-Kickplates never appear on wall, tall or built-in cupboard units.
+A floor corner makes the result incomplete until its **combined measured
+allowance** is entered. Enter an explicit `0` only when adjoining runs cover the
+corner. This avoids guessing whether an L-shaped corner needs one strip, two
+strips or no separate strip. Changing any floor-cupboard line invalidates that
+measurement and asks for it again, because an explicit zero can depend on the
+adjoining runs remaining unchanged.
+
+Wood stock is 2700 mm long and aluminium stock is 3000 mm long. The calculator
+shows total measured length, the minimum number of full stock lengths, and the
+spare before cuts. That stock count assumes offcuts can be reused; it is not a
+cut-packing plan and does not add kerf, trimming or waste. Both materials stay
+out of the carcass-board CSV.
+
+An older browser draft can continue to show its saved 100 mm height. A genuinely
+fresh job, or **Reset to standard**, uses 720 and 150; saved jobs are never
+silently rewritten.
 
 ### Eye level ovens
 
@@ -222,6 +248,10 @@ F600 2-door back,703,568,2,White Melamine,16,,,,,,F600 2-door,back
 
 Identical panels are merged across the whole kitchen with a summed quantity,
 which is what the supplier wants.
+
+Kickplate stock is deliberately excluded. Aluminium is not melamine, and a
+total linear requirement is not a valid MaxCut panel. Use the calculator's
+separate purchase result instead.
 
 `L1`, `L2`, `W1`, `W2` are the trade's names for the four edges of a panel -
 the two long edges, then the two short ones. A shelf is banded `L1`; a cabinet
@@ -263,7 +293,22 @@ side, `eL` is the number of banded edges running along it.
 
 ## Testing
 
-Three layers, in `tests/`:
+### Independent calculation review
+
+The repository includes a project-scoped, read-only Codex agent at
+`.codex/agents/calculation-reviewer.toml`. It is deliberately separate from the
+implementing agent and concentrates on panel dimensions, quantities, edge
+banding, kickplate stock arithmetic, warnings, consolidation, area and edging
+totals, and the numeric values that reach the CSV. `AGENTS.md` requires that
+independent pass before any calculation-bearing change is considered finished.
+
+Ask Codex to **use `calculation_reviewer` to audit the current calculation
+changes**, with the intended construction rule in the prompt. For a general
+review of an uncommitted diff, `/review` remains useful as a second, broader
+code-review pass. The reviewer complements the deterministic suite below; it
+does not replace it or the real-job comparison.
+
+The automated suite has five parts, in `public/tests/` and `tools/`:
 
 **Golden master** (`golden.js`) - all 56 cabinet blocks from the workbook,
 rebuilt and compared panel by panel. 43 reproduce it exactly. The other 13
@@ -282,16 +327,18 @@ unit offered at widths that produced a negative panel, and an oven housing
 offered too narrow for any oven.
 
 **Width sweep** (`sweep.js`) - every family and configuration built at every
-width from 100 mm to 1200 mm. Around 18,700 cabinets and 96,000 panels. The
-rule is not that every width is buildable - a 60 mm cabinet is not - but that
+width from 100 mm to 1200 mm. 18,717 cabinets and 96,888 carcass panels with the
+current catalogue. The rule is not that every width is buildable - a 60 mm
+cabinet is not - but that
 the engine never produces a bad panel *silently*.
 
 **Interface smoke test** (`tools/smoke-test.mjs`) - loads the app against a
-small DOM shim, adds cabinets and checks a cutting list comes out. It exists to
-catch a load-time error, which would otherwise show as a blank page.
+small DOM shim, adds cabinets, exercises the kickplate calculator and checks a
+cutting list comes out. It exists to catch a load-time error, which would
+otherwise show as a blank page.
 
-There is a fourth layer no test can cover: **run a kitchen that has already
-been built through the engine and compare the result to what actually went to
+There is one final validation no automated test can cover: **run a kitchen that
+has already been built through the engine and compare the result to what went to
 the supplier.** That is what turns a passing suite into trust, and it is worth
 doing before the first real job.
 
@@ -327,9 +374,8 @@ a client name and per-square-metre pricing.
 public/                    <- the published site
   index.html               the app
   css/app.css              interface styles
-  css/app.css              interface styles, including the text-size steps
   js/
-    constants.js           every dimension and construction constant, named
+    constants.js           shared dimensions and construction constants
     rules.js               the engine - pure functions, no DOM, no state
     catalog.js             what the interface offers: types, shapes, widths
     csv.js                 the supplier export
@@ -355,11 +401,11 @@ new cut list master 2.xlsx  the original - kept for provenance, never served
 
 | To change | Edit |
 |---|---|
-| A dimension or construction rule | `js/constants.js` |
-| How a cabinet is built | `js/rules.js` |
-| What types, shapes or widths are offered | `js/catalog.js` |
-| The export columns | `js/csv.js` |
-| Wording, layout, behaviour | `js/app.js`, `css/app.css` |
+| A dimension or construction rule | `public/js/constants.js` |
+| How a cabinet is built | `public/js/rules.js` |
+| What types, shapes or widths are offered | `public/js/catalog.js` |
+| The export columns | `public/js/csv.js` |
+| Wording, layout, behaviour | `public/js/app.js`, `public/css/app.css` |
 
 `rules.js` never touches the page and `app.js` never calculates a panel size.
 Keeping that line is what makes the whole thing testable.
@@ -374,11 +420,12 @@ Keeping that line is what makes the whole thing testable.
 | 2 | Working interface - job settings, add cabinets, live parts table | **done** |
 | 3 | Standard-width presets and the per-cabinet override panel | **done** |
 | 4 | CSV export for the supplier | **done** |
-| 5 | Named jobs, import and export | next |
+| 5 | Named jobs; portable job and preset import/export | next |
 
 Held back for a later version: doors and drawer fronts, per-m² pricing, and
-hardware counts. The front geometry is already decoded and implemented in
-`fronts()` in `rules.js`, it is simply not surfaced yet.
+hardware counts. `fronts()` in `rules.js` holds partial exploratory geometry,
+but corner, oven and built-in fronts still need completing and testing before
+any front list is surfaced.
 
 ### Deploying
 
@@ -402,8 +449,9 @@ the interface work.
 
 1. Tall height is 2296 and hard-typed, but the sheet labels it as if it derives
    from the floor and wall units. What should it be calculated from?
-2. Gola currently reduces floor doors by 35 mm and nothing else. Should drawer
-   fronts, wall doors or tall doors also be reduced?
+2. The dormant front helper reduces floor doors by 35 mm for Gola and nothing
+   else. Before fronts are surfaced, should drawer fronts, wall doors or tall
+   doors also be reduced?
 3. The under-counter oven base is cut full width rather than `W - 32`, and so
    are its cleats. Deliberate, or drift?
 4. Normalising drawer reveals moves the 2-drawer and 3-drawer deep fronts by
@@ -416,3 +464,16 @@ the interface work.
 8. The 290 std wall has no shelf, but its 200 mm neighbour does. Omission?
 9. Minimum widths are set at 600 for floor and tall corners, 450 for wall
    corners and 600 for oven housings. Are those the right cut-offs?
+10. What measured allowance should an L-shaped floor corner contribute: one
+    strip, both legs, or zero when adjoining runs cover it? The calculator asks
+    for the combined corner measurement until there is a confirmed formula.
+11. Do floor-standing tall cupboards share the plinth run and therefore need
+    their widths included automatically? They are currently excluded.
+12. Should an exposed end return use the full entered cupboard depth, or should
+    the 50 mm toe recess be subtracted? The calculator currently uses the full
+    depth exactly as entered.
+13. Should wooden kickplate stock eventually have its own supplier schedule, or
+    is the calculator's purchase quantity enough? It is not sent to MaxCut now.
+14. Should all carcass dimensions be restricted to whole millimetres? Invalid
+    cabinet and shelf quantities now fail closed, but custom height, depth and
+    width can still be entered at half-millimetre precision.

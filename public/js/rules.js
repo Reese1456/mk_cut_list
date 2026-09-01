@@ -19,7 +19,10 @@
  * ---------------------------------------------------------------------------
  */
 
-import { DEFAULT_GLOBALS, K, OVEN_APERTURES, SHEET } from './constants.js';
+import {
+  DEFAULT_GLOBALS, DEFAULT_KICKPLATE_SETTINGS, K, KICKPLATE_MATERIALS,
+  OVEN_APERTURES, OVEN_CABINET_MIN_WIDTH, SHEET,
+} from './constants.js';
 
 /* ------------------------------------------------------------------ *
  * Panel helpers
@@ -96,7 +99,7 @@ export function resolve(cab, globals = DEFAULT_GLOBALS) {
  * Floor unit carcass: two sides, a base, an optional shelf, a cleat and a back.
  * The back sits above the base, so it loses less height than a wall unit's.
  */
-function floorCarcass({ W, H, D, T }, { shelves = 1, cleats = 1, back = true, kick = 0 }) {
+function floorCarcass({ W, H, D, T }, { shelves = 1, cleats = 1, back = true }) {
   const inner = W - 2 * T;
   const parts = [
     panel('sides', 2, H, D, 1, 0),
@@ -104,11 +107,7 @@ function floorCarcass({ W, H, D, T }, { shelves = 1, cleats = 1, back = true, ki
   ];
   if (shelves > 0) parts.push(panel('shelf', shelves, inner, D - K.shelfSetback, 1, 0));
   if (cleats > 0) parts.push(panel('cleat', cleats, inner, K.cleatDepth, 1, 0));
-  if (back) parts.push(panel('back', 1, H - K.floorBackReduction, inner, 0, 0));
-
-  // The plinth runs the full width of the unit and is banded along its top
-  // edge, which is the one you see above the floor.
-  if (kick > 0) parts.push(panel('kickplate', 1, W, kick, 1, 0));
+  if (back) parts.push(panel('back', 1, H - T - K.floorBackClearance, inner, 0, 0));
 
   return parts;
 }
@@ -243,7 +242,6 @@ const BUILDERS = {
       shelves: o.shelves ?? 1,
       cleats: o.cleats ?? 1,
       back: o.back ?? true,
-      kick: kickHeight(d, o),
     }),
 
   'floor/drawers': (d, o) => {
@@ -255,7 +253,6 @@ const BUILDERS = {
         shelves: o.shelves ?? 0,
         cleats: o.cleats ?? 1,
         back: o.back ?? true,
-        kick: kickHeight(d, o),
       }),
       ...drawerParts(d, stack, o.runnerDepth ?? 500),
     ];
@@ -275,7 +272,6 @@ const BUILDERS = {
         shelves: o.shelves ?? 0,
         cleats: o.cleats ?? 1,
         back: o.back ?? true,
-        kick: kickHeight(d, o),
       }),
       panel('draw inner fr back', 2, 400, boxWidth, 2, 1),
       panel('draw base', 1, boxWidth, runner - 2 * d.T, 0, 0),
@@ -314,6 +310,8 @@ const BUILDERS = {
       parts.push(panel('back 2', 1, d.H, d.W - K.cornerBackOffset, 0, 0));
       parts.push(panel('back 2', 1, d.H, leg - K.cornerBackOffset, 0, 0));
     }
+    // Its kickplate is measured manually in the separate stock calculator;
+    // never guess one main strip, two leg strips, or adjoining-run coverage.
     return parts;
   },
 
@@ -394,7 +392,7 @@ const BUILDERS = {
    * loses one board thickness rather than two.
    */
   'bic/run': (d, o) => {
-    const shelfWidth = d.W - K.bicShelfReduction;
+    const shelfWidth = d.W - d.T;
     return [
       panel('sides', 2, d.H, d.D, 1, 0),
       panel('shelves', o.shelves ?? 3, shelfWidth, d.D, 1, 0),
@@ -403,14 +401,198 @@ const BUILDERS = {
   },
 };
 
+/* ------------------------------------------------------------------ *
+ * Kickplate stock calculator
+ * ------------------------------------------------------------------ */
+
+const STRAIGHT_FLOOR_CONFIGS = new Set(['doors', 'drawers', 'bin', 'oven']);
+
+/** Length arithmetic must stay finite and exact enough to represent millimetres. */
+function isSafeLength(value) {
+  return Number.isFinite(value) && Math.abs(value) <= Number.MAX_SAFE_INTEGER;
+}
+
+/** A corner allowance is valid only for this exact floor-cupboard layout. */
+function cornerMeasurementSignature(cabinets, globals) {
+  const rows = cabinets
+    .map((cab, index) => ({ cab, index }))
+    .filter(({ cab }) => cab?.type === 'floor')
+    .map(({ cab, index }) => [
+      cab.id ?? `position-${index}`,
+      cab.config,
+      cab.width,
+      cab.qty ?? 1,
+      cab.overrides?.depth ?? globals.floorDepth,
+      cab.config === 'corner' ? (cab.overrides?.legWidth ?? cab.width) : null,
+    ]);
+  return JSON.stringify(rows);
+}
+
 /**
- * The plinth height for a cabinet: its own setting if it has one, otherwise
- * the job's. Zero means this unit sits on legs or on another unit and needs
- * no plinth of its own.
+ * Calculate the linear kickplate stock for a job without adding it to the
+ * carcass-panel list. Straight floor fronts are automatic. End returns use the
+ * operator's count and depth, while corner geometry remains a manual allowance.
  */
-function kickHeight(d, o) {
-  const value = o.kick ?? d.globals.kickHeight ?? 0;
-  return Number.isFinite(value) && value > 0 ? value : 0;
+export function calculateKickplateRequirement(
+  cabinets = [],
+  settings = DEFAULT_KICKPLATE_SETTINGS,
+  globals = DEFAULT_GLOBALS,
+) {
+  const g = { ...DEFAULT_GLOBALS, ...(globals || {}) };
+  const s = { ...DEFAULT_KICKPLATE_SETTINGS, ...(settings || {}) };
+  const warnings = [];
+  let complete = true;
+  let frontLength = 0;
+  let cornerUnits = 0;
+
+  if (!Array.isArray(cabinets)) {
+    warnings.push('The cabinet list is invalid, so no automatic frontage was counted.');
+    complete = false;
+    cabinets = [];
+  }
+
+  const cornerSignature = cornerMeasurementSignature(cabinets, g);
+
+  for (const cab of cabinets) {
+    if (!cab || cab.type !== 'floor') continue;
+
+    const qty = cab.qty ?? 1;
+    if (!Number.isSafeInteger(qty) || qty < 1) {
+      warnings.push(
+        `A floor cabinet has quantity ${qty}; its kickplate length was not counted.`,
+      );
+      complete = false;
+      continue;
+    }
+
+    if (cab.config === 'corner') {
+      cornerUnits += qty;
+      continue;
+    }
+    if (!STRAIGHT_FLOOR_CONFIGS.has(cab.config)) continue;
+
+    if (!isSafeLength(cab.width) || cab.width <= 0) {
+      warnings.push(
+        `A ${cab.config} floor cabinet has width ${cab.width}; its kickplate length was not counted.`,
+      );
+      complete = false;
+      continue;
+    }
+    const contribution = cab.width * qty;
+    const nextFrontLength = frontLength + contribution;
+    if (!isSafeLength(contribution) || !isSafeLength(nextFrontLength)) {
+      warnings.push(
+        `A ${cab.config} floor cabinet produces a kickplate length too large to calculate safely.`,
+      );
+      complete = false;
+      continue;
+    }
+    frontLength = nextFrontLength;
+  }
+
+  const endCount = s.endCount;
+  const endDepth = s.endDepth === null || s.endDepth === undefined || s.endDepth === ''
+    ? g.floorDepth
+    : s.endDepth;
+  let endLength = 0;
+  if (!Number.isSafeInteger(endCount) || endCount < 0) {
+    warnings.push(`End-cupboard count must be a non-negative whole number. This one is ${endCount}.`);
+    complete = false;
+  } else if (endCount > 0) {
+    if (!isSafeLength(endDepth) || endDepth <= 0) {
+      warnings.push(`End depth must be greater than zero. This one is ${endDepth}.`);
+      complete = false;
+    } else {
+      const calculatedEndLength = endCount * endDepth;
+      if (!isSafeLength(calculatedEndLength)) {
+        warnings.push('The combined end-return length is too large to calculate safely.');
+        complete = false;
+      } else {
+        endLength = calculatedEndLength;
+      }
+    }
+  }
+
+  let cornerLength = 0;
+  const cornerProvided = s.cornerAllowance !== null &&
+    s.cornerAllowance !== undefined && s.cornerAllowance !== '';
+  const cornerMeasurementStale = cornerProvided && s.cornerSignature !== cornerSignature;
+  if (cornerUnits > 0) {
+    if (!cornerProvided) {
+      warnings.push(
+        `${cornerUnits} floor corner ${cornerUnits === 1 ? 'cupboard is' : 'cupboards are'} ` +
+        'excluded from the automatic total. Enter their combined measured allowance.',
+      );
+      complete = false;
+    } else if (!isSafeLength(s.cornerAllowance) || s.cornerAllowance < 0) {
+      warnings.push(
+        `Corner allowance must be zero or a positive length. This one is ${s.cornerAllowance}.`,
+      );
+      complete = false;
+    } else if (cornerMeasurementStale) {
+      warnings.push(
+        'The floor-cupboard layout changed after the corners were measured. ' +
+        'Enter their new combined allowance.',
+      );
+      complete = false;
+    } else {
+      cornerLength = s.cornerAllowance;
+    }
+  }
+
+  const hasMaterial = Object.prototype.hasOwnProperty.call(KICKPLATE_MATERIALS, s.material);
+  const material = hasMaterial ? KICKPLATE_MATERIALS[s.material] : null;
+  if (!material) {
+    warnings.push(`Unknown kickplate material: ${s.material}.`);
+    complete = false;
+  }
+
+  const kickHeight = g.kickHeight;
+  if (!isSafeLength(kickHeight) || kickHeight <= 0) {
+    warnings.push(`Kickplate height must be greater than zero. This one is ${kickHeight}.`);
+    complete = false;
+  }
+
+  const requiredLength = frontLength + endLength + cornerLength;
+  if (!isSafeLength(requiredLength)) {
+    warnings.push('The total kickplate length is too large to calculate safely.');
+    complete = false;
+  }
+  const stockLength = material?.stockLength ?? 0;
+  let lengthsRequired = null;
+  let orderedLength = null;
+  if (complete) {
+    lengthsRequired = requiredLength > 0 ? Math.ceil(requiredLength / stockLength) : 0;
+    const calculatedOrderLength = lengthsRequired * stockLength;
+    if (!Number.isSafeInteger(lengthsRequired) || !isSafeLength(calculatedOrderLength)) {
+      warnings.push('The stock quantity is too large to calculate safely.');
+      complete = false;
+      lengthsRequired = null;
+    } else {
+      orderedLength = calculatedOrderLength;
+    }
+  }
+
+  return {
+    material: s.material,
+    materialLabel: material?.label ?? s.material,
+    kickHeight,
+    frontLength,
+    endCount,
+    endDepth,
+    endLength,
+    cornerUnits,
+    cornerLength,
+    cornerSignature,
+    cornerMeasurementStale,
+    requiredLength,
+    stockLength,
+    lengthsRequired,
+    orderedLength,
+    spareLength: orderedLength === null ? null : orderedLength - requiredLength,
+    complete,
+    warnings,
+  };
 }
 
 /** Which builder handles a given cabinet. */
@@ -423,12 +605,35 @@ function builderKey(cab) {
  * Validation
  * ------------------------------------------------------------------ */
 
+/** Invalid discrete inputs must fail closed before they become order rows. */
+function fatalInputWarnings(cab, globals = DEFAULT_GLOBALS) {
+  const warnings = [];
+  const qty = cab.qty ?? 1;
+  if (!Number.isSafeInteger(qty) || qty < 1) {
+    warnings.push(`Quantity must be a positive whole number. This one is ${qty}.`);
+  }
+
+  const o = cab.overrides || {};
+  for (const [key, label] of [
+    ['shelves', 'Shelf count'],
+    ['fixedShelves', 'Fixed-shelf count'],
+    ['cleats', 'Cleat count'],
+  ]) {
+    const value = o[key];
+    if (value !== null && value !== undefined && (!Number.isSafeInteger(value) || value < 0)) {
+      warnings.push(`${label} must be a non-negative whole number. This one is ${value}.`);
+    }
+  }
+
+  return warnings;
+}
+
 /**
  * Check a cabinet for things that would waste board or fail on the saw.
  * Returns an array of human-readable warnings - never throws.
  */
 export function validate(cab, globals = DEFAULT_GLOBALS) {
-  const warnings = [];
+  const warnings = fatalInputWarnings(cab, globals);
   const d = resolve(cab, globals);
   const o = cab.overrides || {};
 
@@ -460,7 +665,17 @@ export function validate(cab, globals = DEFAULT_GLOBALS) {
     }
   }
 
-  // Eye level ovens: does the appliance actually fit the carcass?
+  // Both oven styles take a nominal 600 mm cabinet. Catalogue minimums keep
+  // standard picks safe; this check also covers manually typed widths.
+  const isOvenHousing = cab.config === 'elo' || (cab.type === 'floor' && cab.config === 'oven');
+  if (isOvenHousing && d.W < OVEN_CABINET_MIN_WIDTH) {
+    warnings.push(
+      `A built-in oven is about 595 mm wide and needs a ${OVEN_CABINET_MIN_WIDTH} mm cabinet. ` +
+      `This one is ${d.W} mm.`,
+    );
+  }
+
+  // Eye level ovens: does the appliance actually fit vertically?
   if (cab.config === 'elo') {
     const aperture = typeof o.aperture === 'number'
       ? o.aperture
@@ -472,12 +687,6 @@ export function validate(cab, globals = DEFAULT_GLOBALS) {
         `Oven aperture does not fit: ${bottom} mm below the opening plus a ` +
         `${aperture} mm opening needs ${needed} mm, but the carcass has only ` +
         `${d.H - 2 * d.T} mm inside.`,
-      );
-    }
-    if (d.W < 596) {
-      warnings.push(
-        `A built-in oven is about 595 mm wide and needs a 600 mm cabinet. ` +
-        `This one is ${d.W} mm.`,
       );
     }
   }
@@ -500,11 +709,29 @@ export function expandCabinet(cab, globals = DEFAULT_GLOBALS) {
   const build = BUILDERS[key];
   if (!build) throw new Error(`No rule for ${key}`);
 
+  // A fractional/negative count must not make it as far as the supplier file.
+  // Return the normal warning shape with no panels so the UI can show the
+  // problem while failing closed.
+  if (fatalInputWarnings(cab, globals).length) {
+    return { parts: [], warnings: validate(cab, globals) };
+  }
+
   const d = resolve(cab, globals);
   const raw = build(d, cab.overrides || {});
   const qty = cab.qty ?? 1;
 
   const warnings = validate(cab, globals);
+  const unsafeQuantity = raw.find((p) =>
+    !Number.isSafeInteger(p.qtyPer) || p.qtyPer < 1 ||
+    !Number.isSafeInteger(p.qtyPer * qty));
+  if (unsafeQuantity) {
+    warnings.push(
+      `${unsafeQuantity.desc} quantity is too large to calculate safely. ` +
+      'No panels were produced for this cabinet.',
+    );
+    return { parts: [], warnings };
+  }
+
   const parts = raw.map((p) => {
     const c = canon(p);
     if (c.l > SHEET.length || c.w > SHEET.width) {

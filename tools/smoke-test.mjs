@@ -248,6 +248,19 @@ check('width defaulted', Number(widthInput.value) > 0, `value="${widthInput.valu
 check('standard-width chips rendered', byId.get('a-widths').children.length > 0);
 check('job dimension fields rendered', byId.get('globals').children.length === 11,
   `${byId.get('globals').children.length} fields`);
+check('kickplate material choices rendered', byId.get('k-material').children.length === 2,
+  `${byId.get('k-material').children.length} choices`);
+{
+  const globalInput = (label) => byId.get('globals').children
+    .find((item) => item.children.some(
+      (child) => child.tagName === 'LABEL' && child.textContent === label,
+    ))
+    ?.children.find((child) => child.tagName === 'INPUT');
+  check('fresh floor defaults are independently 720 and 150',
+    Number(globalInput('Floor height')?.value) === 720
+      && Number(globalInput('Kickplate height')?.value) === 150,
+    `floor ${globalInput('Floor height')?.value}, kick ${globalInput('Kickplate height')?.value}`);
+}
 check('cabinet list starts empty', cabList.children.length === 1
   && cabList.children[0].className === 'empty');
 
@@ -266,6 +279,9 @@ check('panel total updated', Number(byId.get('t-panels').textContent) > 0,
   byId.get('t-panels').textContent);
 check('board area updated', byId.get('t-area').textContent !== '0.00 m²',
   byId.get('t-area').textContent);
+check('kickplate calculator counts the first straight floor front',
+  byId.get('k-fronts').textContent.replace(/,/g, '') === '600 mm',
+  byId.get('k-fronts').textContent);
 await new Promise((r) => setTimeout(r, 400)); // the draft save is debounced
 check('draft was saved', store.size > 0);
 
@@ -279,6 +295,71 @@ check('identical cabinets consolidate to the same lines',
   `"${linesAfterOne}" then "${linesAfterTwo}"`);
 check('two cabinets are listed', cabList.children.length === 2,
   `${cabList.children.length} cards`);
+check('kickplate frontage follows added cabinets',
+  byId.get('k-fronts').textContent.replace(/,/g, '') === '1200 mm',
+  byId.get('k-fronts').textContent);
+
+/* end returns and stock material are job-level kickplate inputs */
+{
+  const endCount = byId.get('k-end-count');
+  endCount.value = '2';
+  endCount.fire('input');
+  check('end cupboards use the job floor depth while depth is blank',
+    byId.get('k-ends').textContent.replace(/,/g, '') === '1120 mm',
+    byId.get('k-ends').textContent);
+
+  const material = byId.get('k-material');
+  material.value = 'wood';
+  material.fire('change');
+  check('changing kickplate material changes the stock length',
+    /2700 mm wood length/.test(byId.get('k-buy').textContent),
+    byId.get('k-buy').textContent);
+}
+
+/* floor corners remain manual instead of silently using their width */
+famSelect.value = 'floor';
+famSelect.fire('change');
+cfgSelect.value = 'corner';
+cfgSelect.fire('change');
+widthInput.value = '900';
+addButton.fire('click');
+check('a corner cupboard asks for a measured kickplate allowance',
+  !byId.get('k-corner-field').hidden && !byId.get('k-warnings').hidden,
+  `field hidden ${byId.get('k-corner-field').hidden}, warnings hidden ${byId.get('k-warnings').hidden}`);
+check('a corner width is excluded from automatic frontage',
+  byId.get('k-fronts').textContent.replace(/,/g, '') === '1200 mm',
+  byId.get('k-fronts').textContent);
+
+const cornerAllowance = byId.get('k-corner-allowance');
+cornerAllowance.value = '0';
+cornerAllowance.fire('input');
+check('explicit zero confirms adjoining runs cover the corner',
+  byId.get('k-warnings').hidden && /2700 mm wood length/.test(byId.get('k-buy').textContent),
+  byId.get('k-buy').textContent);
+
+const cornerCard = cabList.children[2];
+const cornerQty = cornerCard.children[0].descendants()
+  .find((node) => node.tagName === 'INPUT');
+cornerQty.value = '2';
+cornerQty.fire('input');
+check('changing a measured corner quantity requires a fresh measurement',
+  cornerAllowance.value === '' && !byId.get('k-warnings').hidden
+    && /Resolve the inputs above/.test(byId.get('k-buy').textContent),
+  `allowance "${cornerAllowance.value}", result "${byId.get('k-buy').textContent}"`);
+
+cornerAllowance.value = '0';
+cornerAllowance.fire('input');
+check('the changed corner can be explicitly measured again',
+  byId.get('k-warnings').hidden && /2700 mm wood length/.test(byId.get('k-buy').textContent),
+  byId.get('k-buy').textContent);
+await new Promise((r) => setTimeout(r, 400));
+{
+  const saved = JSON.parse(store.get('mkitchens.cutlist.draft'));
+  check('kickplate calculator settings are saved with the draft',
+    saved.kickplate?.material === 'wood' && saved.kickplate?.endCount === 2
+      && saved.kickplate?.cornerAllowance === 0,
+    JSON.stringify(saved.kickplate));
+}
 
 /* a cabinet that cannot be built should be flagged, not crash */
 famSelect.value = 'tall';

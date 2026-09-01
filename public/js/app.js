@@ -12,9 +12,12 @@
  */
 
 import {
-  expandCabinet, consolidate, totalArea, totalEdging, describeCabinet, resolve,
+  calculateKickplateRequirement, expandCabinet, consolidate, totalArea,
+  totalEdging, describeCabinet, resolve,
 } from './rules.js';
-import { DEFAULT_GLOBALS } from './constants.js';
+import {
+  DEFAULT_GLOBALS, DEFAULT_KICKPLATE_SETTINGS, KICKPLATE_MATERIALS,
+} from './constants.js';
 import { cutlistRows, toCsv, cutlistFilename, downloadCsv } from './csv.js';
 import {
   FAMILIES, family, config, fieldsFor, makeCabinet, widthsFor, defaultWidthFor,
@@ -32,6 +35,7 @@ const DISPLAY_KEY = 'mkitchens.cutlist.display';
 const state = {
   job: { client: '', reference: '', boardColour: '', edgeColour: '', gola: false },
   globals: { ...DEFAULT_GLOBALS },
+  kickplate: { ...DEFAULT_KICKPLATE_SETTINGS },
   cabinets: [],
   view: 'by-cabinet',
 };
@@ -111,8 +115,11 @@ function saveDraft() {
   clearTimeout(saveTimer);
   saveTimer = setTimeout(() => {
     try {
-      const { job, globals, cabinets, view } = state;
-      localStorage.setItem(DRAFT_KEY, JSON.stringify({ job, globals, cabinets, view }));
+      const { job, globals, kickplate, cabinets, view } = state;
+      localStorage.setItem(
+        DRAFT_KEY,
+        JSON.stringify({ job, globals, kickplate, cabinets, view }),
+      );
     } catch {
       // Private windows and blocked site data both throw here. Losing the
       // draft is survivable; breaking the page is not.
@@ -127,6 +134,7 @@ function loadDraft() {
     const saved = JSON.parse(raw);
     if (saved.job) Object.assign(state.job, saved.job);
     if (saved.globals) Object.assign(state.globals, saved.globals);
+    if (saved.kickplate) Object.assign(state.kickplate, saved.kickplate);
     if (Array.isArray(saved.cabinets)) state.cabinets = saved.cabinets;
     if (saved.view) state.view = saved.view;
   } catch {
@@ -341,6 +349,120 @@ function wireJobFields() {
     refreshAllCards();
     renderOutput();
   });
+}
+
+/* ------------------------------------------------------------------ *
+ * Kickplate calculator
+ * ------------------------------------------------------------------ */
+
+const mm = (value) => `${new Intl.NumberFormat('en-GB', {
+  maximumFractionDigits: 2,
+}).format(value)} mm`;
+
+function renderKickplateSummary() {
+  const result = calculateKickplateRequirement(
+    state.cabinets,
+    state.kickplate,
+    state.globals,
+  );
+
+  // A combined corner measurement belongs to the floor layout it was entered
+  // for. Any floor-line change can alter a measured corner or an explicit-zero
+  // adjoining-run decision, so require confirmation again before ordering.
+  if (result.cornerMeasurementStale) {
+    state.kickplate.cornerAllowance = null;
+    state.kickplate.cornerSignature = null;
+    $('#k-corner-allowance').value = '';
+    saveDraft();
+  }
+
+  const depth = $('#k-end-depth');
+  depth.placeholder = String(state.globals.floorDepth);
+  $('#k-corner-field').hidden = result.cornerUnits === 0;
+
+  $('#k-fronts').textContent = mm(result.frontLength);
+  $('#k-ends').textContent = mm(result.endLength);
+  $('#k-corners').textContent = mm(result.cornerLength);
+  $('#k-total').textContent = mm(result.requiredLength);
+
+  const buy = $('#k-buy');
+  const spare = $('#k-spare');
+  const status = $('#k-status');
+
+  if (!result.complete) {
+    buy.textContent = 'Resolve the inputs above to calculate stock';
+    spare.textContent = '';
+    status.textContent = 'needs attention';
+  } else if (result.requiredLength === 0) {
+    buy.textContent = 'Add floor cupboards to calculate';
+    spare.textContent = '';
+    status.textContent = '';
+  } else {
+    const noun = result.lengthsRequired === 1 ? 'length' : 'lengths';
+    buy.textContent =
+      `${result.lengthsRequired} x ${result.stockLength} mm ` +
+      `${result.materialLabel.toLowerCase()} ${noun}`;
+    spare.textContent =
+      `${mm(result.spareLength)} spare before cuts; ${mm(result.kickHeight)} high`;
+    status.textContent = `${(result.requiredLength / 1000).toFixed(2)} m needed`;
+  }
+
+  const warnings = $('#k-warnings');
+  warnings.replaceChildren();
+  warnings.hidden = result.warnings.length === 0;
+  for (const warning of result.warnings) warnings.append(el('p', null, warning));
+}
+
+function wireKickplateCalculator() {
+  const material = $('#k-material');
+  material.replaceChildren();
+  for (const [value, spec] of Object.entries(KICKPLATE_MATERIALS)) {
+    const option = document.createElement('option');
+    option.value = value;
+    option.textContent = `${spec.label} - ${spec.stockLength} mm`;
+    material.append(option);
+  }
+  if (!Object.prototype.hasOwnProperty.call(
+    KICKPLATE_MATERIALS,
+    state.kickplate.material,
+  )) {
+    state.kickplate.material = DEFAULT_KICKPLATE_SETTINGS.material;
+  }
+  material.value = state.kickplate.material;
+  material.addEventListener('change', () => {
+    state.kickplate.material = material.value;
+    saveDraft();
+    renderKickplateSummary();
+  });
+
+  const endCount = $('#k-end-count');
+  const endDepth = $('#k-end-depth');
+  const cornerAllowance = $('#k-corner-allowance');
+  endCount.value = state.kickplate.endCount ?? 0;
+  endDepth.value = state.kickplate.endDepth ?? '';
+  cornerAllowance.value = state.kickplate.cornerAllowance ?? '';
+
+  const bindNumber = (input, key, blankValue) => {
+    input.addEventListener('input', () => {
+      const raw = input.value.trim();
+      state.kickplate[key] = raw === '' ? blankValue : Number(raw);
+      if (key === 'cornerAllowance') {
+        const current = calculateKickplateRequirement(
+          state.cabinets,
+          state.kickplate,
+          state.globals,
+        );
+        state.kickplate.cornerSignature = raw === '' ? null : current.cornerSignature;
+      }
+      saveDraft();
+      renderKickplateSummary();
+    });
+  };
+  bindNumber(endCount, 'endCount', 0);
+  bindNumber(endDepth, 'endDepth', null);
+  bindNumber(cornerAllowance, 'cornerAllowance', null);
+
+  renderKickplateSummary();
 }
 
 function renderGlobals() {
@@ -865,6 +987,7 @@ function partsTable(rows, { showCabinet }) {
 
 function renderOutput() {
   const { groups, all, consolidated } = compute();
+  renderKickplateSummary();
 
   /* ---- totals ---- */
   const panels = all.reduce((n, p) => n + p.qty, 0);
@@ -992,6 +1115,7 @@ wireJobFields();
 renderGlobals();
 wireGlobalsReset();
 renderAddForm();
+wireKickplateCalculator();
 wireViewToggle();
 wireClearAll();
 renderPresets();

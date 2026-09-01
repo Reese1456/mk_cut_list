@@ -76,7 +76,7 @@
         </div>
         <div class="check" style="margin-top:12px">
           <input type="checkbox" id="j-gola">
-          <label for="j-gola">Gola kitchen &mdash; floor doors lose 35&nbsp;mm</label>
+          <label for="j-gola">Gola kitchen &mdash; saved for the future front list; carcass CSV unchanged</label>
         </div>
       </div>
     </section>
@@ -147,6 +147,58 @@
         <button type="button" class="ghost danger" id="clear-all">Clear all</button>
       </div>
       <div class="cab-list" id="cab-list"></div>
+    </section>
+
+    <section class="sec">
+      <div class="sec-head">
+        <h2>Kickplate calculator</h2>
+        <span class="count" id="k-status"></span>
+      </div>
+      <div class="panel panel-pad">
+        <p class="muted-note">
+          Straight floor-cupboard fronts are counted automatically. Add the
+          visible end returns and measure corners separately.
+        </p>
+        <div class="grid grid-2 kick-fields">
+          <div class="field">
+            <label for="k-material">Material</label>
+            <select id="k-material"></select>
+          </div>
+          <div class="field">
+            <label for="k-end-count">End cupboards</label>
+            <input type="number" id="k-end-count" min="0" step="1" aria-describedby="k-warnings">
+          </div>
+          <div class="field">
+            <label for="k-end-depth">End depth</label>
+            <input type="number" id="k-end-depth" min="1" step="1" aria-describedby="k-warnings">
+            <div class="hint">Blank follows the job's floor depth.</div>
+          </div>
+          <div class="field" id="k-corner-field" hidden>
+            <label for="k-corner-allowance">All corner cupboards</label>
+            <input type="number" id="k-corner-allowance" min="0" step="1" aria-describedby="k-warnings">
+            <div class="hint">Enter their combined measured length. Enter 0 if adjoining runs cover them.</div>
+          </div>
+        </div>
+
+        <dl class="kick-breakdown">
+          <div><dt>Straight fronts</dt><dd id="k-fronts">0 mm</dd></div>
+          <div><dt>End returns</dt><dd id="k-ends">0 mm</dd></div>
+          <div><dt>Corner allowance</dt><dd id="k-corners">0 mm</dd></div>
+          <div class="kick-total"><dt>Total measured</dt><dd id="k-total">0 mm</dd></div>
+        </dl>
+
+        <div class="kick-result" aria-live="polite">
+          <span>Minimum stock</span>
+          <strong id="k-buy">Add floor cupboards to calculate</strong>
+          <small id="k-spare"></small>
+        </div>
+        <div class="kick-warnings" id="k-warnings" role="alert" aria-live="polite" hidden></div>
+        <p class="hint kick-note">
+          Stock quantity is a minimum based on total length and reusable offcuts;
+          it does not plan separate runs, joints, trimming or saw cuts. Kickplates
+          stay out of the carcass-board CSV.
+        </p>
+      </div>
     </section>
 
   </div>

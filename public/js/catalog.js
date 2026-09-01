@@ -1,3 +1,5 @@
+import { OVEN_CABINET_MIN_WIDTH } from './constants.js';
+
 /**
  * Cabinet catalogue - what the operator can choose, and what each choice needs.
  *
@@ -70,13 +72,6 @@ export const FIELDS = {
     default: null,
     hint: 'Leave blank for the standard number.',
   },
-  kick: {
-    label: 'Kickplate',
-    type: 'number',
-    suffix: 'mm',
-    default: null,
-    hint: 'Leave blank for the job setting. Enter 0 for no kickplate.',
-  },
 };
 
 /**
@@ -92,10 +87,13 @@ export const FAMILIES = [
     widths: [150, 200, 300, 450, 500, 541, 600, 700, 750, 900, 1000, 1100, 1200],
     defaultWidth: 600,
     configs: [
-      { id: 'doors', label: 'Doors', fields: ['doors', 'shelves', 'kick'] },
-      { id: 'drawers', label: 'Drawer stack', fields: ['drawers', 'runnerDepth', 'kick'] },
-      { id: 'bin', label: 'Bin unit', fields: ['runnerDepth', 'kick'] },
-      { id: 'oven', label: 'Oven housing', fields: [] },
+      { id: 'doors', label: 'Doors', fields: ['doors', 'shelves'] },
+      { id: 'drawers', label: 'Drawer stack', fields: ['drawers', 'runnerDepth'] },
+      { id: 'bin', label: 'Bin unit', fields: ['runnerDepth'] },
+      {
+        id: 'oven', label: 'Oven housing', fields: [],
+        minWidth: OVEN_CABINET_MIN_WIDTH,
+      },
       { id: 'corner', label: 'Corner', fields: ['legWidth', 'shelves'], minWidth: 600 },
     ],
   },
@@ -137,7 +135,11 @@ export const FAMILIES = [
       { id: 'broom', label: 'Broom', fields: ['doors', 'shelves'] },
       // A built-in oven is about 595 mm wide, so 600 is the smallest housing
       // that can take one.
-      { id: 'elo', label: 'Eye level oven', fields: ['aperture', 'apertureBottom', 'shelves'], minWidth: 600 },
+      {
+        id: 'elo', label: 'Eye level oven',
+        fields: ['aperture', 'apertureBottom', 'shelves'],
+        minWidth: OVEN_CABINET_MIN_WIDTH,
+      },
       { id: 'corner', label: 'Corner', fields: ['legWidth'], minWidth: 600 },
     ],
   },

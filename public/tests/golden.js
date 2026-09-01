@@ -34,14 +34,27 @@ function comparePanels(expected, actual) {
   return { missing, extra };
 }
 
+/** Compare actual and allowed differences as exact multisets. */
+function compareDifferenceSet(actual, allowed) {
+  const counts = new Map();
+  for (const value of actual) counts.set(value, (counts.get(value) || 0) + 1);
+  for (const value of allowed) counts.set(value, (counts.get(value) || 0) - 1);
+
+  const unexpected = [];
+  const unused = [];
+  for (const [value, count] of counts) {
+    for (let i = 0; i < count; i++) unexpected.push(value);
+    for (let i = 0; i < -count; i++) unused.push(value);
+  }
+  return { unexpected, unused };
+}
+
 export function runGoldenMaster(fixtures) {
   const results = [];
 
-  // The original workbook has no concept of a plinth - kickplates were cut
-  // separately and never appeared on its cut list. Building with kickHeight 0
-  // keeps this a like-for-like comparison; the plinth is a deliberate addition
-  // covered by its own tests rather than a difference from the spreadsheet.
-  const globals = { ...fixtures.globals, boardThickness: 16, kickHeight: 0 };
+  // The original workbook has no kickplate rows. Kickplates are now calculated
+  // separately as linear stock and never enter the carcass panel comparison.
+  const globals = { ...fixtures.globals, boardThickness: 16 };
 
   for (const block of fixtures.blocks) {
     const spec = BLOCK_MAP[block.block];
@@ -71,12 +84,19 @@ export function runGoldenMaster(fixtures) {
 
     const { missing, extra } = comparePanels(expected, actual);
     const allowed = ALLOWED_DIFFS[block.block] || [];
-    const allowedSet = new Set(allowed.map((a) => a.panel));
+    const allowedMissing = allowed.filter((entry) => entry.side === 'sheet').map((entry) => entry.panel);
+    const allowedExtra = allowed.filter((entry) => entry.side === 'engine').map((entry) => entry.panel);
+    const missingCheck = compareDifferenceSet(missing, allowedMissing);
+    const extraCheck = compareDifferenceSet(extra, allowedExtra);
+    const unused = [
+      ...missingCheck.unused.map((value) => `sheet: ${value}`),
+      ...extraCheck.unused.map((value) => `engine: ${value}`),
+    ];
 
-    const unexpectedMissing = missing.filter((m) => !allowedSet.has(m));
-    const unexpectedExtra = extra.filter((e) => !allowedSet.has(e));
-
-    if (unexpectedMissing.length === 0 && unexpectedExtra.length === 0) {
+    if (
+      missingCheck.unexpected.length === 0 && extraCheck.unexpected.length === 0 &&
+      unused.length === 0
+    ) {
       results.push({
         block: block.block,
         status: missing.length || extra.length ? 'normalised' : 'exact',
@@ -90,8 +110,11 @@ export function runGoldenMaster(fixtures) {
         family: block.family,
         config: block.config,
         width: block.width,
-        missing: unexpectedMissing,
-        extra: unexpectedExtra,
+        missing: missingCheck.unexpected,
+        extra: extraCheck.unexpected,
+        detail: unused.length
+          ? `Allowlist entries were not exercised: ${unused.join('; ')}`
+          : undefined,
       });
     }
   }

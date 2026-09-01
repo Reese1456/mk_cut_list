@@ -71,8 +71,6 @@ test('every option a shape offers is one the engine reads', () => {
     legWidth: 800,
     aperture: 'double',
     apertureBottom: 1200,
-    // Zero removes the plinth, which is a visible change to the panel list.
-    kick: 0,
   };
 
   // Options that legitimately affect only the front list or validation, not
@@ -126,6 +124,15 @@ test('every field referenced by a shape is defined', () => {
       }
     }
   }
+});
+
+test('kickplate stock is not offered as a per-cabinet panel option', () => {
+  const floor = family('floor');
+  for (const id of ['doors', 'drawers', 'bin', 'oven']) {
+    const cfg = floor.configs.find((candidate) => candidate.id === id);
+    assert(!cfg.fields.includes('kick'), `${id}: still offers the old kickplate panel override`);
+  }
+  assert(!FIELDS.kick, 'the retired kickplate panel field is still defined');
 });
 
 test('quantity multiplies every panel', () => {
