@@ -55,6 +55,22 @@
 
     <section class="sec">
       <div class="sec-head"><h2>Job</h2></div>
+      <div class="panel panel-pad job-library">
+        <label for="saved-jobs">Saved jobs on this browser</label>
+        <select id="saved-jobs"></select>
+        <div class="job-actions">
+          <button type="button" id="job-new">New job</button>
+          <button type="button" id="job-save">Save job</button>
+          <button type="button" id="job-open">Open</button>
+          <button type="button" id="job-rename">Rename</button>
+          <button type="button" id="job-duplicate">Duplicate</button>
+          <button type="button" id="job-delete" class="danger">Delete</button>
+          <button type="button" id="job-export">Export job backup</button>
+          <button type="button" id="job-import">Import job backup</button>
+        </div>
+        <p id="job-status" class="hint" role="status" aria-live="polite">Draft autosaves. Save a named job to keep a snapshot.</p>
+        <input type="file" id="job-file" accept=".json,application/json" hidden>
+      </div>
       <div class="panel panel-pad">
         <div class="grid grid-2">
           <div class="field">
@@ -136,6 +152,11 @@
           on its card. It will appear here to add again in one click.
         </p>
         <div class="presets" id="preset-list"></div>
+        <div class="job-actions">
+          <button type="button" id="presets-export">Export presets</button>
+          <button type="button" id="presets-import">Import presets</button>
+        </div>
+        <input type="file" id="presets-file" accept=".json,application/json" hidden>
       </div>
     </section>
 

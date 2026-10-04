@@ -688,3 +688,6 @@ button.big {
   color: var(--ink-soft);
   line-height: 1.55;
 }
+
+.job-library select { width: 100%; margin-top: 8px; }
+.job-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }

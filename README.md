@@ -6,9 +6,9 @@ Replaces the manual process of working through `new cut list master 2.xlsx` afte
 every kitchen design. You pick cabinets, it produces the panel list and a clean
 CSV for the board supplier.
 
-**Status: Phase 4 complete.** A whole kitchen can be entered, adjusted and
-exported as a CSV for the board supplier. Named jobs plus portable import/export
-of saved jobs and preset libraries are the remaining work.
+**Status: Phase 5 complete.** A whole kitchen can be entered, adjusted and
+exported as a CSV for the board supplier. Named jobs and portable JSON backups
+of jobs and preset libraries are available.
 
 ---
 
@@ -99,8 +99,8 @@ the file for the supplier. All three remember what you chose.
 
    The cabinet card also states what it will cut - "Doors · 1 door · 3 shelves" -
    so a change to an option confirms itself without hunting for it in the list.
-   There is no save or apply button anywhere: everything recalculates as you
-   type.
+   Cabinet edits recalculate as you type. Save job keeps a named snapshot;
+   it is not needed to apply cabinet changes.
 6. Press **Download cutting list** for the supplier's CSV.
 
 The **Kickplate calculator** underneath the kitchen list is separate from the
@@ -116,8 +116,24 @@ panel bigger than a sheet.
 Changing one re-cuts the whole kitchen.
 
 The kitchen you are working on, including its kickplate-calculator settings, is
-kept in the browser so a refresh does not lose it. Named jobs, and moving jobs
-or presets between machines, come in phase 5.
+kept in the browser so a refresh does not lose it.
+
+Use **Save job** to keep a named snapshot on this browser. **Open** restores a
+selected snapshot; **Rename**, **Duplicate** and **Delete** manage saved jobs.
+Duplicate copies the selected saved snapshot, not unsaved draft edits. **New job**
+starts with standard dimensions and leaves saved jobs and presets available.
+Edits autosave to the working draft; update a named snapshot with Save job.
+After a refresh the draft and its named-job association remain available.
+
+**Export job backup** downloads the current draft as a versioned JSON file.
+**Import job backup** validates the whole file, then asks before replacing the
+draft; it never overwrites a named job. Save the imported draft to name it.
+Presets have separate export/import buttons. Import adds presets to the library,
+including same-named entries, and leaves existing presets in place. Browser jobs
+and presets are local to that browser/site; keep JSON backups to move computers
+or protect against cleared site data. Theme and text size stay on the computer.
+Invalid files, unsupported versions and files over 5 MB are rejected.
+Storage failures are reported for named-job saves and preset imports.
 
 ---
 
@@ -308,7 +324,7 @@ review of an uncommitted diff, `/review` remains useful as a second, broader
 code-review pass. The reviewer complements the deterministic suite below; it
 does not replace it or the real-job comparison.
 
-The automated suite has five parts, in `public/tests/` and `tools/`:
+The automated suite has six parts, in `public/tests/` and `tools/`:
 
 **Golden master** (`golden.js`) - all 56 cabinet blocks from the workbook,
 rebuilt and compared panel by panel. 43 reproduce it exactly. The other 13
@@ -337,10 +353,25 @@ small DOM shim, adds cabinets, exercises the kickplate calculator and checks a
 cutting list comes out. It exists to catch a load-time error, which would
 otherwise show as a blank page.
 
-There is one final validation no automated test can cover: **run a kitchen that
-has already been built through the engine and compare the result to what went to
-the supplier.** That is what turns a passing suite into trust, and it is worth
-doing before the first real job.
+**Portability** (`tools/portable-test.mjs`) - checks versioned job and preset
+backups, rejects invalid files, and verifies that restored jobs produce the
+same panels, totals, CSV values and kickplate results.
+
+**Practical validation confirmed (4 October 2026):** the project owner reports
+that their former boss tested multiple cut-list outputs against the old
+spreadsheet calculations and confirmed that the results look good. Specific
+job inputs and supplier-order comparisons were not supplied. This records the
+completed output comparison without resolving the construction questions below.
+
+Phase 5 tests check saved-job reopening and JSON round trips, including custom
+dimensions, overrides, quantities, corner measurements, consolidated parts,
+board/edging totals and supplier CSV equivalence.
+
+**Phase 5 user checks confirmed (4 October 2026):** saving and loading a named
+job worked, refreshing preserved the working session, and the tested export
+came out well. Export presentation/formatting is deferred to a later improvement.
+The independent calculation review also passed, with no remaining findings or
+new spreadsheet differences.
 
 ---
 
@@ -360,7 +391,8 @@ doing before the first real job.
 - The 150 floor cleat is 125 mm deep like every other.
 - Edge banding corrected on the 300 high wall shelf and the 500 bic shelves.
 
-**These should be checked against a real job before the first order goes out.**
+The multiple-output spreadsheet comparison above is now confirmed. The accepted
+differences remain documented individually in `diff-allowlist.js`.
 
 ---
 
@@ -380,6 +412,7 @@ public/                    <- the published site
     catalog.js             what the interface offers: types, shapes, widths
     csv.js                 the supplier export
     app.js                 interface wiring - holds no maths
+    portable.js            versioned job/preset file validation
   tests.html               the checks, in a browser
   tests/
     fixtures.js            56 cabinet blocks lifted from the workbook (generated)
@@ -394,6 +427,7 @@ public/                    <- the published site
 tools/
   extract_fixtures.py      regenerates fixtures.js from the workbook
   smoke-test.mjs           loads the interface headlessly to catch a blank page
+  portable-test.mjs        checks backup validation and output round trips
 new cut list master 2.xlsx  the original - kept for provenance, never served
 ```
 
@@ -420,7 +454,10 @@ Keeping that line is what makes the whole thing testable.
 | 2 | Working interface - job settings, add cabinets, live parts table | **done** |
 | 3 | Standard-width presets and the per-cabinet override panel | **done** |
 | 4 | CSV export for the supplier | **done** |
-| 5 | Named jobs; portable job and preset import/export | next |
+| 5 | Named jobs; portable job and preset import/export | **done** |
+
+Phase 5 is closed after automated checks, independent review and the user
+checks recorded above. Export presentation/formatting is a follow-up improvement.
 
 Held back for a later version: doors and drawer fronts, per-m² pricing, and
 hardware counts. `fronts()` in `rules.js` holds partial exploratory geometry,

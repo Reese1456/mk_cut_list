@@ -519,5 +519,107 @@ function state1Count() {
     `filename ${downloaded}`);
 }
 
+
+/* named snapshots, draft replacement, backups and storage failures */
+{
+  const storedJobs = () => JSON.parse(localStorage.getItem('mkitchens.cutlist.jobs') || '[]');
+  const before = byId.get('t-area').textContent;
+  const count = state1Count();
+  byId.get('job-save').fire('click');
+  const saved = storedJobs()[0];
+  check('saving a named job stores a snapshot', !!saved && saved.data.cabinets.length === count);
+  byId.get('job-new').fire('click');
+  check('new job clears the draft and preserves saved jobs and presets', state1Count() === 0 && storedJobs().length === 1 && byId.get('preset-list').children.length === 1);
+  byId.get('saved-jobs').value = saved.id;
+  byId.get('job-open').fire('click');
+  check('opening a saved job restores cabinets and board totals', state1Count() === count && byId.get('t-area').textContent === before);
+  const realPrompt = globalThis.prompt;
+  globalThis.prompt = () => 'Renamed kitchen';
+  byId.get('job-rename').fire('click');
+  check('renaming preserves the saved job data', storedJobs()[0].name === 'Renamed kitchen' && JSON.stringify(storedJobs()[0].data) === JSON.stringify(saved.data));
+  globalThis.prompt = () => 'Kitchen copy';
+  byId.get('job-duplicate').fire('click');
+  check('duplicating creates an independent named snapshot', storedJobs().length === 2 && storedJobs()[1].id !== saved.id);
+  globalThis.prompt = realPrompt;
+  byId.get('job-delete').fire('click');
+  check('deleting a snapshot preserves the working draft', storedJobs().length === 1 && state1Count() === count);
+  byId.get('saved-jobs').value = saved.id;
+  const realConfirm = globalThis.confirm;
+  globalThis.confirm = () => false;
+  byId.get('job-new').fire('click');
+  byId.get('job-delete').fire('click');
+  check('cancelling destructive actions preserves jobs and draft', storedJobs().length === 1 && state1Count() === count);
+  globalThis.confirm = realConfirm;
+  const { encodeFile } = await import('../public/js/portable.js');
+  const input = byId.get('job-file');
+  const importJob = async text => {
+    input.files = [{size:text.length, text:async () => text}];
+    await input.listeners.change[0]({target:input});
+  };
+  await importJob('{broken');
+  check('malformed job imports preserve the draft', state1Count() === count && byId.get('job-status').textContent.startsWith('Import failed:'));
+  globalThis.confirm = () => false;
+  await importJob(encodeFile('job', saved.data));
+  check('cancelled imports preserve the draft', state1Count() === count);
+  globalThis.confirm = realConfirm;
+  byId.get('job-new').fire('click');
+  await importJob(encodeFile('job', saved.data));
+  check('import restores the complete draft without overwriting named jobs', state1Count() === count && byId.get('t-area').textContent === before && storedJobs().length === 1);
+  const presetInput = byId.get('presets-file');
+  const exportedPresets = JSON.parse(localStorage.getItem('mkitchens.cutlist.presets'));
+  presetInput.files = [{size:100, text:async () => encodeFile('presets',exportedPresets)}];
+  await presetInput.listeners.change[0]({target:presetInput});
+  const merged = JSON.parse(localStorage.getItem('mkitchens.cutlist.presets'));
+  check('preset import adds entries with new IDs and keeps originals', merged.length === 2 && merged[0].id !== merged[1].id);
+  const importedCard = cabList.children[0];
+  const qtyControl = importedCard.descendants().find(n => n.tagName === 'INPUT' && n.type === 'number');
+  const validJobs = JSON.stringify(storedJobs());
+  const originalPresets = localStorage.getItem('mkitchens.cutlist.presets');
+  const optionToggle = importedCard.descendants().find(n => n.tagName === 'BUTTON' && n.textContent === 'Options');
+  optionToggle.fire('click');
+  const heightOption = importedCard.children[1].descendants().find(n => n.tagName === 'INPUT' && n.parentNode.textContent.includes('Shelves'));
+  heightOption.value = '1.5'; heightOption.fire('input');
+  const presetSave = importedCard.children[1].descendants().find(n => n.tagName === 'BUTTON' && n.textContent === 'Save as preset');
+  presetSave.fire('click');
+  check('invalid preset saves preserve the existing library', localStorage.getItem('mkitchens.cutlist.presets') === originalPresets && byId.get('job-status').textContent.startsWith('Could not save preset'));
+  heightOption.value = ''; heightOption.fire('input');
+  qtyControl.value = '1.5'; qtyControl.fire('input');
+  byId.get('job-save').fire('click');
+  check('invalid draft cannot corrupt the named job library', JSON.stringify(storedJobs()) === validJobs && byId.get('job-status').textContent.startsWith('Could not save:'));
+  byId.get('saved-jobs').value = saved.id; byId.get('job-open').fire('click');
+  check('valid snapshots reopen after rejected invalid saves', state1Count() === count && byId.get('t-area').textContent === before);
+  const realSet = localStorage.setItem;
+  localStorage.setItem = () => { throw new Error('Storage full'); };
+  byId.get('job-save').fire('click');
+  check('storage failure is reported without claiming a save', byId.get('job-status').textContent.includes('Could not save') && storedJobs().length === 1);
+  localStorage.setItem = realSet;
+  let filename;
+  const realCreate = document.createElement;
+  document.createElement = tag => { const node = realCreate(tag); if (tag === 'a') node.click = () => { filename = node.download; }; return node; };
+  byId.get('job-export').fire('click');
+  check('job backup downloads JSON', filename?.endsWith('.json'));
+  byId.get('presets-export').fire('click');
+  check('preset backup downloads JSON', filename === 'MKitchens_Presets.json');
+  document.createElement = realCreate;
+}
+
+/* Refresh restores the draft's named-job association; corrupt libraries stay protected. */
+{
+  await new Promise(r => setTimeout(r, 300));
+  const savedDraft = JSON.parse(localStorage.getItem('mkitchens.cutlist.draft'));
+  const savedCount = state1Count();
+  for (const node of byId.values()) node.listeners = {};
+  await import('../public/js/app.js?reload');
+  check('refresh restores draft and its named-job association', state1Count() === savedCount && byId.get('job-save').textContent === 'Update saved job' && !!savedDraft.activeJob);
+  const before = JSON.parse(localStorage.getItem('mkitchens.cutlist.jobs')).length;
+  byId.get('job-save').fire('click');
+  check('saving after refresh updates the existing snapshot', JSON.parse(localStorage.getItem('mkitchens.cutlist.jobs')).length === before);
+  await new Promise(r => setTimeout(r, 300));
+  localStorage.setItem('mkitchens.cutlist.jobs', '{broken');
+  for (const node of byId.values()) node.listeners = {};
+  await import('../public/js/app.js?corrupt-library');
+  byId.get('job-save').fire('click');
+  check('corrupt saved-job storage is never overwritten', localStorage.getItem('mkitchens.cutlist.jobs') === '{broken' && byId.get('job-status').textContent.includes('cannot be overwritten'));
+}
 console.log(failures ? `\n${failures} failed.\n` : '\nAll interface checks passed.\n');
 process.exit(failures ? 1 : 0);

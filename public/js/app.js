@@ -1,3 +1,4 @@
+import { validateJob, validateCabinet, encodeFile, decodeFile } from './portable.js';
 /**
  * MKitchens Cutlist Manager - interface.
  *
@@ -105,7 +106,7 @@ function selectInput(options, value) {
 /* ------------------------------------------------------------------ *
  * Saving the working draft
  *
- * Named jobs, import and export come later. This only makes sure a
+ * This makes sure a
  * half-entered kitchen survives an accidental refresh.
  * ------------------------------------------------------------------ */
 
@@ -118,7 +119,7 @@ function saveDraft() {
       const { job, globals, kickplate, cabinets, view } = state;
       localStorage.setItem(
         DRAFT_KEY,
-        JSON.stringify({ job, globals, kickplate, cabinets, view }),
+        JSON.stringify({ job, globals, kickplate, cabinets, view, activeJob }),
       );
     } catch {
       // Private windows and blocked site data both throw here. Losing the
@@ -132,6 +133,7 @@ function loadDraft() {
     const raw = localStorage.getItem(DRAFT_KEY);
     if (!raw) return;
     const saved = JSON.parse(raw);
+    activeJob = typeof saved.activeJob === 'string' ? saved.activeJob : null;
     if (saved.job) Object.assign(state.job, saved.job);
     if (saved.globals) Object.assign(state.globals, saved.globals);
     if (saved.kickplate) Object.assign(state.kickplate, saved.kickplate);
@@ -166,16 +168,14 @@ function savePresets() {
 
 /** Store a cabinet's setup under a name so it can be added again in one click. */
 function addPreset(name, cab) {
-  presets.push({
-    id: uid(),
-    name,
-    type: cab.type,
-    config: cab.config,
-    width: cab.width,
-    overrides: { ...cab.overrides },
-  });
-  savePresets();
-  renderPresets();
+  try {
+    const preset = validateCabinet({ id: uid(), name, type: cab.type, config: cab.config, width: cab.width, overrides: { ...cab.overrides } }, true);
+    const next = [...presets, preset];
+    localStorage.setItem(PRESET_KEY, JSON.stringify(next));
+    presets = next;
+    renderPresets();
+    jobMessage('Preset saved.');
+  } catch { jobMessage('Could not save preset. Check its dimensions/options and browser storage. Existing presets are unchanged.'); }
 }
 
 function renderPresets() {
@@ -1105,6 +1105,116 @@ function wireClearAll() {
   });
 }
 
+
+const JOBS_KEY = 'mkitchens.cutlist.jobs';
+let jobs = [];
+let activeJob = null;
+let jobsReadable = true;
+const snapshot = () => JSON.parse(JSON.stringify(state));
+const jobMessage = text => { $('#job-status').textContent = text; };
+function persistJobs(next) {
+  if (!jobsReadable) { jobMessage('Saved job data could not be read. Export the draft; existing saved data cannot be overwritten.'); return false; }
+  try { localStorage.setItem(JOBS_KEY, JSON.stringify(next)); jobs = next; return true; }
+  catch { jobMessage('Could not save jobs in this browser. Export a job backup to keep your work.'); return false; }
+}
+function renderJobs(selected = activeJob) {
+  const host = $('#saved-jobs');
+  host.replaceChildren();
+  const blank = el('option', null, 'Choose a saved job'); blank.value = ''; host.append(blank);
+  for (const job of jobs) { const option = el('option', null, job.name); option.value = job.id; host.append(option); }
+  host.value = selected ?? '';
+  const active = jobs.find(j => j.id === activeJob);
+  $('#job-save').textContent = active ? 'Update saved job' : 'Save job';
+  $('#job-save').title = active ? 'Update ' + active.name + ' from the working draft' : 'Save the working draft as a named job';
+}
+function applyJob(data, id = null) {
+  clearTimeout(saveTimer);
+  Object.assign(state, validateJob(data));
+  activeJob = id;
+  cards.clear(); openCards.clear();
+  for (const [selector, key] of [['#j-client','client'],['#j-ref','reference'],['#j-board','boardColour'],['#j-edge','edgeColour']]) $(selector).value = state.job[key];
+  $('#j-gola').checked = state.job.gola;
+  for (const [selector, key] of [['#k-material','material'],['#k-end-count','endCount'],['#k-end-depth','endDepth'],['#k-corner-allowance','cornerAllowance']]) $(selector).value = state.kickplate[key] ?? '';
+  renderGlobals(); renderCabinets(); renderOutput(); renderJobs();
+  for (const b of document.querySelectorAll('#view-toggle button')) b.classList.toggle('on', b.dataset.view === state.view);
+  saveDraft();
+}
+function downloadBackup(kind, data, name) {
+  const url = URL.createObjectURL(new Blob([encodeFile(kind, data)], { type: 'application/json' }));
+  const link = el('a'); link.href = url; link.download = name.replace(/[^a-z0-9_-]/gi, '_') + '.json';
+  document.body.append(link); link.click(); link.remove(); setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+function wireJobs() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(JOBS_KEY) || '[]');
+    if (!Array.isArray(saved)) throw new Error();
+    jobs = saved.map(j => { if (!j || typeof j.id !== 'string' || typeof j.name !== 'string') throw new Error(); return { ...j, data: validateJob(j.data) }; });
+    if (new Set(jobs.map(j => j.id)).size !== jobs.length) throw new Error();
+  } catch { jobsReadable = false; jobs = []; jobMessage('Saved jobs could not be read. Existing browser data has been left untouched. Export your draft; saving is disabled to protect existing data.'); }
+  if (!jobs.some(j => j.id === activeJob)) activeJob = null;
+  renderJobs();
+  $('#job-save').addEventListener('click', () => {
+    const existing = jobs.find(j => j.id === activeJob);
+    const name = existing?.name ?? prompt('Name this job', state.job.reference || state.job.client || 'Kitchen');
+    if (!name?.trim()) return;
+    if (existing && !confirm('Replace the saved snapshot of "' + name + '" with this draft?')) return;
+    let data;
+    try { data = validateJob(snapshot()); }
+    catch { jobMessage('Could not save: check cabinet quantities, options and kickplate inputs for invalid values. Existing saved jobs are unchanged.'); return; }
+    const entry = { id: existing?.id ?? uid(), name: name.trim(), data };
+    if (persistJobs([...jobs.filter(j => j.id !== entry.id), entry])) { activeJob = entry.id; saveDraft(); renderJobs(); jobMessage('Saved "' + entry.name + '". Later edits stay in the draft until you save again.'); }
+  });
+  $('#job-open').addEventListener('click', () => {
+    const job = jobs.find(j => j.id === $('#saved-jobs').value); if (!job) return;
+    if (!confirm('Open "' + job.name + '" and replace the working draft? Export or save the draft first if you need it.')) return;
+    applyJob(job.data, job.id); jobMessage('Opened "' + job.name + '".');
+  });
+  $('#job-new').addEventListener('click', () => {
+    if (!confirm('Start a new job and replace the working draft? Saved jobs and presets remain available.')) return;
+    applyJob({ job: { client:'', reference:'', boardColour:'', edgeColour:'', gola:false }, globals:{...DEFAULT_GLOBALS}, kickplate:{...DEFAULT_KICKPLATE_SETTINGS}, cabinets:[], view:'by-cabinet' });
+    jobMessage('New job. Draft autosaves; save a named job to keep a snapshot.');
+  });
+  for (const action of ['rename','duplicate','delete']) $('#job-' + action).addEventListener('click', () => {
+    const job = jobs.find(j => j.id === $('#saved-jobs').value); if (!job) return;
+    if (action === 'delete') {
+      if (!confirm('Delete saved job "' + job.name + '"? The working draft will remain.')) return;
+      if (persistJobs(jobs.filter(j => j.id !== job.id))) { if (activeJob === job.id) activeJob = null; saveDraft(); renderJobs(); jobMessage('Saved job deleted.'); }
+      return;
+    }
+    const name = prompt(action === 'rename' ? 'Rename saved job' : 'Name the duplicate', job.name + (action === 'duplicate' ? ' copy' : ''));
+    if (!name?.trim()) return;
+    const entry = {...job, id: action === 'duplicate' ? uid() : job.id, name: name.trim()};
+    if (persistJobs(action === 'duplicate' ? [...jobs, entry] : jobs.map(j => j.id === job.id ? entry : j))) { renderJobs(entry.id); jobMessage('Saved job ' + (action === 'duplicate' ? 'duplicated.' : 'renamed.')); }
+  });
+  $('#job-export').addEventListener('click', () => {
+    try { downloadBackup('job', validateJob(snapshot()), 'MKitchens_Job_' + (state.job.reference || state.job.client || 'Draft')); }
+    catch { jobMessage('Could not export: check cabinet quantities, options and kickplate inputs for invalid values.'); }
+  });
+  $('#presets-export').addEventListener('click', () => {
+    try { downloadBackup('presets', presets.map(p => validateCabinet(p, true)), 'MKitchens_Presets'); }
+    catch { jobMessage('Could not export presets: the library contains invalid values. Correct or remove the affected presets first.'); }
+  });
+  for (const kind of ['job','presets']) {
+    const input = $('#' + kind + '-file');
+    $('#' + kind + '-import').addEventListener('click', () => input.click());
+    input.addEventListener('change', async () => {
+      const file = input.files?.[0]; if (!file) return;
+      try {
+        if (file.size > 5 * 1024 * 1024) throw new Error('File is too large (maximum 5 MB).');
+        const data = decodeFile(await file.text(), kind);
+        if (kind === 'job') {
+          if (!confirm('Import this job and replace the working draft? Saved jobs will remain.')) return;
+          applyJob(data); jobMessage('Job imported into the draft. Save it as a named job when ready.');
+        } else {
+          const next = [...presets, ...data.map(p => ({...p, id:uid()}))];
+          localStorage.setItem(PRESET_KEY, JSON.stringify(next)); presets = next; renderPresets(); jobMessage('Imported ' + data.length + ' presets; existing presets kept.');
+        }
+      } catch (error) { jobMessage('Import failed: ' + error.message); }
+      finally { input.value = ''; }
+    });
+  }
+}
+
 loadDraft();
 loadPresets();
 loadDisplay();
@@ -1118,6 +1228,7 @@ renderAddForm();
 wireKickplateCalculator();
 wireViewToggle();
 wireClearAll();
+wireJobs();
 renderPresets();
 renderCabinets();
 renderOutput();

@@ -5,7 +5,7 @@
   "type": "module",
   "private": true,
   "scripts": {
-    "test": "node public/tests/run.js && node tools/smoke-test.mjs",
+    "test": "node public/tests/run.js && node tools/portable-test.mjs && node tools/smoke-test.mjs",
     "test:engine": "node public/tests/run.js",
     "smoke": "node tools/smoke-test.mjs",
     "fixtures": "python tools/extract_fixtures.py"
